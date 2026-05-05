@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Ruff check
+        run: |
+          uv tool install ruff
+          ruff check \
+            cost-tracker/app \
+            mcps/hello-world/src \
+            mcps/opac/src \
+            proxies/oauth-translator/src \
+            proxies/local-bridge/src \
+            proxies/document-preprocessor/src
+
+  validate-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate every docker-compose.yml
+        run: |
+          set -e
+          # Fake the env vars and external networks so `compose config` doesn't bail.
+          docker network create proxy 2>/dev/null || true
+          docker network create ai-bus 2>/dev/null || true
+          docker network create webui_backend 2>/dev/null || true
+          for f in $(find . -name docker-compose.yml -not -path './.git/*'); do
+            echo "==> $f"
+            (cd "$(dirname "$f")" && \
+              env GATEWAY_DOMAIN=x WEBUI_DOMAIN=x WEBUI_URL=https://x WEBUI_NAME=x \
+                  COST_DOMAIN=x LITELLM_API_BASE=x LITELLM_VIRTUAL_KEY=x \
+                  LITELLM_MASTER_KEY=x LITELLM_SALT_KEY=x \
+                  POSTGRES_USER=x POSTGRES_PASSWORD=x POSTGRES_DB=x \
+                  REDIS_PASSWORD=x QDRANT_API_KEY=x WEBUI_SECRET_KEY=x \
+                  LITELLM_DB_URL=x OPENWEBUI_DB_URL=x \
+                  UPSTREAM_BASE_URL=x UPSTREAM_TOKEN_URL=x \
+                  UPSTREAM_CLIENT_ID=x UPSTREAM_CLIENT_SECRET=x INCOMING_BEARER=x \
+                  STACK=x \
+              docker compose config -q) \
+            || exit 1
+          done

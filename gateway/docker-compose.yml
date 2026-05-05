@@ -1,0 +1,93 @@
+name: gateway
+
+# LiteLLM proxy — the one door outside.
+#
+# All model traffic from OpenWebUI (and anything else you build) goes through
+# this. It speaks OpenAI's API on the inside and translates to whatever
+# providers you register on the outside. Spend is logged per virtual key, which
+# is the foundation that cost-tracker/ joins against the OpenWebUI user table.
+#
+# Networks:
+#   - "proxy" is your reverse-proxy network (Traefik, Caddy, nginx). Create it
+#     once: `docker network create proxy`.
+#   - "backend" is internal, for litellm <-> postgres <-> redis traffic.
+#   - "ai-bus" is shared with webui/ and cost-tracker/. Create it once:
+#     `docker network create ai-bus`.
+
+services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      STORE_MODEL_IN_DB: "True"
+      # Bring your own provider keys — see .env.example for the full list.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - proxy
+      - backend
+      - ai-bus
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.litellm.rule=Host(`${GATEWAY_DOMAIN}`)
+      - traefik.http.routers.litellm.entrypoints=websecure
+      - traefik.http.routers.litellm.tls=true
+      - traefik.http.services.litellm.loadbalancer.server.port=4000
+      - traefik.docker.network=proxy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+      - ai-bus  # exposed to ai-bus so cost-tracker/ can read spend logs
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+volumes:
+  postgres_data: {}
+  redis_data: {}
+
+networks:
+  proxy:
+    external: true
+  ai-bus:
+    external: true
+  backend: {}

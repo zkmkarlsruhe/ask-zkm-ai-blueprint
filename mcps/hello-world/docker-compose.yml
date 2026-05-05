@@ -1,0 +1,27 @@
+name: hello-world-mcp
+
+services:
+  hello-world:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hello-world-mcp:local
+    restart: unless-stopped
+    environment:
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+      LOG_LEVEL: INFO
+    ports:
+      - "8001:8000"   # exposed for local testing; remove in production
+    networks:
+      - default
+      # Add the docker network OpenWebUI is on, e.g.:
+      # - webui_backend
+
+# To make this MCP reachable from the webui/ stack without exposing a port,
+# add it to webui's "backend" network:
+#
+# networks:
+#   webui_backend:
+#     external: true
+#     name: webui_backend

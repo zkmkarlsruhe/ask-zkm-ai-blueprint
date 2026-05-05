@@ -1,0 +1,18 @@
+name: document-preprocessor
+
+services:
+  document-preprocessor:
+    build: .
+    image: document-preprocessor:local
+    restart: unless-stopped
+    environment:
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      LOG_LEVEL: INFO
+    networks:
+      # Add to webui's backend network so OpenWebUI can call us by service name.
+      - webui_backend
+
+networks:
+  webui_backend:
+    external: true
+    # name: webui_backend     # adjust if your webui stack name is different

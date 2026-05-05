@@ -1,0 +1,117 @@
+name: webui
+
+# OpenWebUI + Qdrant (vector DB for RAG) + Redis (websockets, sessions).
+#
+# This stack is the chat surface your users see. It talks to:
+#   - the gateway/ stack at $LITELLM_API_BASE for all model calls
+#   - your IdP (Keycloak / Authentik / Entra / etc.) via OIDC, see docs/auth.md
+#   - any MCP servers you bring up (from mcps/), via HTTP
+#
+# Defaults to SQLite for OpenWebUI's own DB. For production, swap to Postgres —
+# see examples/postgres-vs-sqlite.md.
+
+services:
+  open-webui:
+    # Pin a specific version. Bumps should be intentional.
+    image: ghcr.io/open-webui/open-webui:0.7.2
+    # If you bake in customizations/ via the example Dockerfile, swap to:
+    #   build:
+    #     context: .
+    #     dockerfile: customizations/Dockerfile.example
+    restart: unless-stopped
+    environment:
+      WEBUI_NAME: ${WEBUI_NAME}
+      WEBUI_URL: ${WEBUI_URL}
+      CORS_ALLOW_ORIGIN: ${WEBUI_URL}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
+      WEBUI_AUTH: "true"
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-false}
+      DEFAULT_USER_ROLE: user
+      ENABLE_LOGIN_FORM: ${ENABLE_LOGIN_FORM:-false}
+
+      # All model traffic goes through the gateway. No provider keys here.
+      OPENAI_API_BASE_URL: ${LITELLM_API_BASE}
+      OPENAI_API_KEY: ${LITELLM_VIRTUAL_KEY}
+
+      # Vector DB for RAG.
+      VECTOR_DB: qdrant
+      QDRANT_URI: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+
+      # Sessions + websockets.
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      ENABLE_WEBSOCKET_SUPPORT: "true"
+      WEBSOCKET_MANAGER: redis
+      WEBSOCKET_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+
+      # Encryption keys for sessions and OAuth state. Both 32-byte random.
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
+      OAUTH_SESSION_TOKEN_ENCRYPTION_KEY: ${WEBUI_SECRET_KEY}
+
+      # --- OIDC (uncomment and fill in once your IdP is wired up) ---
+      # ENABLE_OAUTH_SIGNUP: "true"
+      # OAUTH_PROVIDER_NAME: ${OIDC_PROVIDER_NAME}
+      # OAUTH_CLIENT_ID: ${OIDC_CLIENT_ID}
+      # OAUTH_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      # OPENID_PROVIDER_URL: ${OIDC_DISCOVERY_URL}
+      # OAUTH_SCOPES: openid email profile groups
+      # See docs/auth.md for the full pattern (group-claim → role mapping).
+
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.webui.rule=Host(`${WEBUI_DOMAIN}`)
+      - traefik.http.routers.webui.entrypoints=websecure
+      - traefik.http.routers.webui.tls=true
+      - traefik.http.services.webui.loadbalancer.server.port=8080
+      - traefik.docker.network=proxy
+    networks:
+      - proxy
+      - backend
+    volumes:
+      - openwebui_data:/app/backend/data
+
+  qdrant:
+    image: qdrant/qdrant:v1.16.3
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: "6333"
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5s bash -c '</dev/tcp/localhost/6333' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend
+    volumes:
+      - redis_data:/data
+
+volumes:
+  openwebui_data: {}
+  qdrant_data: {}
+  redis_data: {}
+
+networks:
+  proxy:
+    external: true
+  backend: {}

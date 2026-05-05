@@ -1,0 +1,45 @@
+name: cost-tracker
+
+# Joins LiteLLM spend logs with OpenWebUI users to produce per-person spend
+# attribution and a public CO2 dashboard. Reads two Postgres databases
+# directly — both must be reachable on the "ai-bus" network shared with
+# gateway/ (which owns LiteLLM's DB) and webui/ (which owns OWUI's DB,
+# only if you've upgraded webui from sqlite to postgres).
+
+services:
+  cost-tracker:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    image: cost-tracker:local
+    restart: unless-stopped
+    environment:
+      LITELLM_DB_URL: ${LITELLM_DB_URL}
+      OPENWEBUI_DB_URL: ${OPENWEBUI_DB_URL}
+      CO2_PER_1K_TOKENS: ${CO2_PER_1K_TOKENS:-0.0004}
+    networks:
+      - proxy
+      - ai-bus
+    labels:
+      - traefik.enable=true
+      # The dashboard at "/" — protect this with whatever middleware your
+      # reverse proxy provides (BasicAuth, OIDC, IP allowlist).
+      - traefik.http.routers.cost-dashboard.rule=Host(`${COST_DOMAIN}`) && !PathPrefix(`/carbon`) && !PathPrefix(`/api/carbon`)
+      - traefik.http.routers.cost-dashboard.entrypoints=websecure
+      - traefik.http.routers.cost-dashboard.tls=true
+      # Add your auth middleware here, e.g.:
+      # - traefik.http.routers.cost-dashboard.middlewares=basic-auth@file
+      - traefik.http.routers.cost-dashboard.service=cost-tracker
+      # The carbon page + API at "/carbon" — public, no auth.
+      - traefik.http.routers.carbon-public.rule=Host(`${COST_DOMAIN}`) && (PathPrefix(`/carbon`) || PathPrefix(`/api/carbon`))
+      - traefik.http.routers.carbon-public.entrypoints=websecure
+      - traefik.http.routers.carbon-public.tls=true
+      - traefik.http.routers.carbon-public.service=cost-tracker
+      - traefik.http.services.cost-tracker.loadbalancer.server.port=8000
+      - traefik.docker.network=proxy
+
+networks:
+  proxy:
+    external: true
+  ai-bus:
+    external: true

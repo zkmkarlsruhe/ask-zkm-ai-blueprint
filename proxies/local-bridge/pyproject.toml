@@ -1,0 +1,22 @@
+[project]
+name = "local-bridge-proxy"
+version = "0.1.0"
+description = "Aliasing + shaping bridge in front of self-hosted LLM backends."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+local-bridge = "proxy:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/proxy.py"]
+sources = ["src"]

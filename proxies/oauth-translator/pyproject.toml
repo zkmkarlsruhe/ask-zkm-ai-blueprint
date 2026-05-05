@@ -1,0 +1,22 @@
+[project]
+name = "oauth-translator-proxy"
+version = "0.1.0"
+description = "Translate OAuth2 client-credentials to a bearer key for OpenAI-compatible upstreams."
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+oauth-translator = "proxy:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/proxy.py"]
+sources = ["src"]

@@ -1,0 +1,33 @@
+# Dockerfile.example — bake your house customizations into OpenWebUI.
+#
+# This image extends the upstream OWUI image with:
+#   - carbon-badge.js (the in-chat CO₂ widget)
+#   - sidebar-links.js (your house links in the left sidebar)
+#   - any branding assets you drop into ./brand/ (favicon, logo, splash)
+#
+# Build:
+#   cd webui/
+#   docker build -f customizations/Dockerfile.example -t my-museum-owui:local .
+#
+# Then in docker-compose.yml swap `image:` for a `build:` block pointing here.
+
+ARG OWUI_VERSION=0.7.2
+FROM ghcr.io/open-webui/open-webui:${OWUI_VERSION}
+
+# OWUI serves its frontend out of /app/build. The exact path may shift across
+# OWUI versions — verify with `docker run --rm -it --entrypoint sh <image>`
+# and `find /app -name index.html`.
+ARG FRONTEND_DIR=/app/build
+
+# Copy injected scripts into a known location.
+COPY customizations/carbon-badge.js   ${FRONTEND_DIR}/static/house/carbon-badge.js
+COPY customizations/sidebar-links.js  ${FRONTEND_DIR}/static/house/sidebar-links.js
+
+# (Optional) copy branding assets if you have them.
+# COPY brand/ ${FRONTEND_DIR}/static/house/brand/
+
+# Inject <script> tags into index.html. Idempotent: greps before sed-ing.
+RUN INDEX="${FRONTEND_DIR}/index.html" && \
+    if ! grep -q 'house/carbon-badge.js' "$INDEX"; then \
+      sed -i 's#</body>#<script src="/static/house/carbon-badge.js" defer></script>\n<script src="/static/house/sidebar-links.js" defer></script>\n</body>#' "$INDEX"; \
+    fi

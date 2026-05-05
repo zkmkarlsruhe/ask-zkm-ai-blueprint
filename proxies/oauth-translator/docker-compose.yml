@@ -1,0 +1,20 @@
+name: oauth-translator
+
+services:
+  oauth-translator:
+    build: .
+    image: oauth-translator:local
+    restart: unless-stopped
+    environment:
+      UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL}
+      UPSTREAM_TOKEN_URL: ${UPSTREAM_TOKEN_URL}
+      UPSTREAM_CLIENT_ID: ${UPSTREAM_CLIENT_ID}
+      UPSTREAM_CLIENT_SECRET: ${UPSTREAM_CLIENT_SECRET}
+      UPSTREAM_SCOPE: ${UPSTREAM_SCOPE:-}
+      INCOMING_BEARER: ${INCOMING_BEARER}
+    networks:
+      - ai-bus      # shared with gateway/ — LiteLLM reaches us as http://oauth-translator:8080
+
+networks:
+  ai-bus:
+    external: true

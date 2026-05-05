@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carbon Footprint Information</title>
+    <style>
+        /* ============================================ */
+        /* CSS VARIABLES - CUSTOMIZE COLORS HERE      */
+        /* ============================================ */
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #27ae60;
+            --accent-color: #3498db;
+            --warning-color: #f39c12;
+            --background-color: #ecf0f1;
+            --card-background: #ffffff;
+            --text-color: #2c3e50;
+            --text-light: #7f8c8d;
+            --border-radius: 12px;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* ============================================ */
+        /* HERO SECTION                               */
+        /* ============================================ */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
+            color: white;
+            padding: 60px 40px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            margin-bottom: 40px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .hero-amount {
+            font-size: 3em;
+            font-weight: 800;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .hero-subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        /* ============================================ */
+        /* CARD GRID                                  */
+        /* ============================================ */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: var(--card-background);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .card-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .card h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+
+        .card h3 {
+            font-size: 1.2em;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            color: var(--accent-color);
+        }
+
+        .card p {
+            color: var(--text-light);
+            margin-bottom: 15px;
+            line-height: 1.8;
+        }
+
+        .card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .card li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+            color: var(--text-light);
+        }
+
+        .card li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--accent-color);
+            font-weight: bold;
+        }
+
+        /* ============================================ */
+        /* COMMUNITY STATS SECTION                    */
+        /* ============================================ */
+        .stats-section {
+            background: var(--card-background);
+            border-radius: var(--border-radius);
+            padding: 40px;
+            box-shadow: var(--shadow);
+        }
+
+        .stats-section h2 {
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 30px;
+            color: var(--primary-color);
+        }
+
+        .chart-container {
+            max-width: 800px;
+            margin: 0 auto 30px;
+            padding: 20px;
+        }
+
+        canvas {
+            max-height: 400px;
+        }
+
+        /* ============================================ */
+        /* RESPONSIVE DESIGN                          */
+        /* ============================================ */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 1.8em;
+            }
+
+            .hero-amount {
+                font-size: 2em;
+            }
+
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-section {
+                padding: 20px;
+            }
+        }
+
+        /* ============================================ */
+        /* EDITABLE CONTENT MARKERS                   */
+        /* ============================================ */
+        .placeholder-notice {
+            background: #fff3cd;
+            border: 2px dashed #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- ============================================ -->
+        <!-- HERO SECTION - EDIT TITLE AND SUBTITLE     -->
+        <!-- ============================================ -->
+        <div class="hero">
+            <!-- EDIT: Main page title -->
+            <h1>PLACEHOLDER: Carbon Footprint Information</h1>
+
+            <!-- Dynamic amount display - DO NOT EDIT -->
+            <div class="hero-amount">{{ amount }}g CO₂</div>
+
+            <!-- EDIT: Subtitle text -->
+            <div class="hero-subtitle">PLACEHOLDER: Your estimated carbon impact today</div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- 3-CARD GRID - EDIT CONTENT BELOW           -->
+        <!-- ============================================ -->
+        <div class="card-grid">
+
+            <!-- ========================================== -->
+            <!-- CARD 1: What Is This?                     -->
+            <!-- ========================================== -->
+            <div class="card">
+                <!-- EDIT: Card icon (emoji or text) -->
+                <div class="card-icon">📊</div>
+
+                <!-- EDIT: Card title -->
+                <h2>PLACEHOLDER: What Is This?</h2>
+
+                <!-- EDIT: Card introduction paragraph -->
+                <p>PLACEHOLDER: Brief introduction explaining what carbon footprint tracking means in the context of AI usage. Replace this text with your explanation.</p>
+
+                <!-- EDIT: Subsection title (optional) -->
+                <h3>PLACEHOLDER: Key Points</h3>
+
+                <!-- EDIT: List items - add or remove as needed -->
+                <ul>
+                    <li>PLACEHOLDER: First key point about what we track</li>
+                    <li>PLACEHOLDER: Second key point about the metrics</li>
+                    <li>PLACEHOLDER: Third key point about the purpose</li>
+                    <li>PLACEHOLDER: Fourth point if needed</li>
+                </ul>
+
+                <!-- EDIT: Additional paragraph (optional) -->
+                <p>PLACEHOLDER: Additional context or information that helps users understand the basics of carbon tracking.</p>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- CARD 2: Why Is This Approximation?        -->
+            <!-- ========================================== -->
+            <div class="card">
+                <!-- EDIT: Card icon (emoji or text) -->
+                <div class="card-icon">⚠️</div>
+
+                <!-- EDIT: Card title -->
+                <h2>PLACEHOLDER: Why Is This Guesswork?</h2>
+
+                <!-- EDIT: Card introduction paragraph -->
+                <p>PLACEHOLDER: Explain why these numbers are approximations and not exact measurements. Be honest about the limitations.</p>
+
+                <!-- EDIT: Subsection title (optional) -->
+                <h3>PLACEHOLDER: What We Don't Know</h3>
+
+                <!-- EDIT: List items - add or remove as needed -->
+                <ul>
+                    <li>PLACEHOLDER: First limitation or unknown factor</li>
+                    <li>PLACEHOLDER: Second unknown or unmeasured aspect</li>
+                    <li>PLACEHOLDER: Third thing we can't accurately measure</li>
+                    <li>PLACEHOLDER: Fourth limitation if applicable</li>
+                </ul>
+
+                <!-- EDIT: Additional paragraph (optional) -->
+                <p>PLACEHOLDER: More details about why precision is difficult and what factors make this an estimate rather than exact science.</p>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- CARD 3: Methodology                       -->
+            <!-- ========================================== -->
+            <div class="card">
+                <!-- EDIT: Card icon (emoji or text) -->
+                <div class="card-icon">🔬</div>
+
+                <!-- EDIT: Card title -->
+                <h2>PLACEHOLDER: How We Calculate This</h2>
+
+                <!-- EDIT: Card introduction paragraph -->
+                <p>PLACEHOLDER: Describe the methodology used for calculations. Explain the assumptions and sources.</p>
+
+                <!-- EDIT: Subsection title (optional) -->
+                <h3>PLACEHOLDER: Our Approach</h3>
+
+                <!-- EDIT: List items - add or remove as needed -->
+                <ul>
+                    <li>PLACEHOLDER: Token-based calculation method</li>
+                    <li>PLACEHOLDER: CO₂ per token factor: {{ co2_factor }} kg/1k tokens</li>
+                    <li>PLACEHOLDER: Data sources and research basis</li>
+                    <li>PLACEHOLDER: Assumptions we make</li>
+                </ul>
+
+                <!-- EDIT: Additional paragraph (optional) -->
+                <p>PLACEHOLDER: Additional details about the methodology, research papers referenced, or industry standards followed.</p>
+            </div>
+
+        </div>
+
+        <!-- ============================================ -->
+        <!-- COMMUNITY STATISTICS SECTION               -->
+        <!-- ============================================ -->
+        <div class="stats-section">
+            <!-- EDIT: Section title -->
+            <h2>PLACEHOLDER: Community Statistics</h2>
+
+            <!-- EDIT: Introduction paragraph -->
+            <p style="text-align: center; margin-bottom: 30px; color: var(--text-light);">
+                PLACEHOLDER: All data shown below is aggregated across all users. No individual user data is displayed.
+            </p>
+
+            <!-- Chart 1: Daily Token Usage -->
+            <div class="chart-container">
+                <canvas id="dailyUsageChart"></canvas>
+            </div>
+
+            <!-- Chart 2: Weekly Token Usage -->
+            <div class="chart-container">
+                <canvas id="weeklyUsageChart"></canvas>
+            </div>
+
+            <!-- Chart 3: Monthly CO2 Emissions -->
+            <div class="chart-container">
+                <canvas id="monthlyEmissionsChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <script>
+        /* ============================================ */
+        /* CONFIGURATION - Edit comparison metrics     */
+        /* ============================================ */
+        const COMPARISON_METRICS = {
+            // EDIT: These values for different comparisons
+            co2PerKmDriving: 0.120,  // kg CO2 per km of car driving
+            co2PerKmFlying: 0.250,   // kg CO2 per km of flying
+            co2PerKwhElectricity: 0.500,  // kg CO2 per kWh electricity
+        };
+
+        /* ============================================ */
+        /* FETCH AND DISPLAY COMMUNITY STATS          */
+        /* ============================================ */
+        async function loadCommunityStats() {
+            try {
+                // Stats API base — same origin by default. Override by setting
+                // window.CARBON_API_BASE before this script loads if your API
+                // lives on a different domain.
+                const API_BASE = window.CARBON_API_BASE || '';
+
+                const dailyResponse   = await fetch(`${API_BASE}/api/carbon/stats/daily`);
+                const dailyStats      = await dailyResponse.json();
+                const weeklyResponse  = await fetch(`${API_BASE}/api/carbon/stats/weekly`);
+                const weeklyStats     = await weeklyResponse.json();
+                const monthlyResponse = await fetch(`${API_BASE}/api/carbon/stats/monthly`);
+                const monthlyStats    = await monthlyResponse.json();
+
+                // Prepare daily data (last 30 days, reversed for chronological order)
+                const dailyData = dailyStats.reverse();
+                const dailyLabels = dailyData.map(d => {
+                    const date = new Date(d.date);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                const dailyTokens = dailyData.map(d => d.total_tokens / 1000); // Convert to thousands
+
+                // Create Daily Usage Chart
+                const dailyCtx = document.getElementById('dailyUsageChart').getContext('2d');
+                new Chart(dailyCtx, {
+                    type: 'line',
+                    data: {
+                        labels: dailyLabels,
+                        datasets: [{
+                            label: 'Daily Token Usage (thousands)',
+                            data: dailyTokens,
+                            backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Community Token Usage - Last 30 Days',
+                                font: { size: 18, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Tokens (thousands)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Prepare weekly data (last 12 weeks, reversed)
+                const weeklyData = weeklyStats.reverse();
+                const weeklyLabels = weeklyData.map(d => {
+                    const date = new Date(d.week_start);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                const weeklyTokens = weeklyData.map(d => d.total_tokens / 1000); // Convert to thousands
+
+                // Create Weekly Usage Chart
+                const weeklyCtx = document.getElementById('weeklyUsageChart').getContext('2d');
+                new Chart(weeklyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: weeklyLabels,
+                        datasets: [{
+                            label: 'Weekly Token Usage (thousands)',
+                            data: weeklyTokens,
+                            backgroundColor: 'rgba(46, 204, 113, 0.6)',
+                            borderColor: 'rgba(46, 204, 113, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Community Token Usage - Last 12 Weeks',
+                                font: { size: 18, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Tokens (thousands)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Prepare monthly data (last 12 months, reversed)
+                const monthlyData = monthlyStats.reverse();
+                const monthlyLabels = monthlyData.map(d => {
+                    const date = new Date(d.month_start);
+                    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                });
+                const monthlyCO2 = monthlyData.map(d => d.co2_kg);
+
+                // Create Monthly Emissions Chart
+                const monthlyCtx = document.getElementById('monthlyEmissionsChart').getContext('2d');
+                new Chart(monthlyCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyLabels,
+                        datasets: [{
+                            label: 'Monthly CO₂ Emissions (kg)',
+                            data: monthlyCO2,
+                            backgroundColor: 'rgba(231, 76, 60, 0.6)',
+                            borderColor: 'rgba(231, 76, 60, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Community CO₂ Emissions - Last 12 Months',
+                                font: { size: 18, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'CO₂ (kg)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading community stats:', error);
+                // Display error message to user
+                const statsSection = document.querySelector('.stats-section');
+                statsSection.innerHTML = '<p style="text-align: center; color: red;">Unable to load statistics. Please try again later.</p>';
+            }
+        }
+
+        // Load stats when page loads
+        document.addEventListener('DOMContentLoaded', loadCommunityStats);
+    </script>
+</body>
+</html>

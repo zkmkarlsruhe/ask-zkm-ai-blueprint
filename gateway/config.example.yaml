@@ -1,0 +1,87 @@
+# LiteLLM proxy configuration — example.
+#
+# This is the file that decides which model providers your institution uses.
+# Each entry under model_list becomes a model id that OpenWebUI (and anything
+# else hitting the gateway) can request.
+#
+# The four guarantees in practice:
+#   - Sovereignty: prefer EU / academic providers; mark commercial ones clearly.
+#   - Cost: every entry inherits per-user spend tracking via virtual keys.
+#   - All-traffic-through-one-door: don't let OpenWebUI talk to providers
+#     directly. Only the gateway has provider keys.
+#
+# All entries below are commented stubs — uncomment and fill in for your house.
+# Full provider list and parameter reference:
+#   https://docs.litellm.ai/docs/providers
+
+model_list:
+
+  # ---- EU / academic providers (preferred) ----------------------------------
+  #
+  # Many EU national research clouds expose an OpenAI-compatible endpoint.
+  # Examples we've seen: GWDG SAIA (Germany), various university HPC gateways.
+  # Pattern: openai/<their-model-id> with a custom api_base.
+  #
+  # - model_name: academic/llama-3.3-70b
+  #   litellm_params:
+  #     model: openai/meta-llama-3.3-70b-instruct
+  #     api_base: https://your-academic-cloud.example.eu/v1
+  #     api_key: os.environ/ACADEMIC_API_KEY
+
+  # ---- Local / self-hosted (fully sovereign) --------------------------------
+  #
+  # If you run Ollama, vLLM, or text-generation-inference on a GPU box, point
+  # at it here. Zero external traffic, zero per-token cost, full data control.
+  #
+  # - model_name: local/llama-3.1-8b
+  #   litellm_params:
+  #     model: ollama/llama3.1:8b
+  #     api_base: http://your-ollama-host:11434
+
+  # ---- Commercial providers (deliberate choice) -----------------------------
+  #
+  # Make these visibly different in OpenWebUI (e.g. prefix with "us/" or
+  # "commercial/") so users know they're stepping outside the sovereign path.
+  #
+  # - model_name: us/claude-sonnet-4-5
+  #   litellm_params:
+  #     model: anthropic/claude-sonnet-4-5
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+  #
+  # - model_name: us/gpt-5
+  #   litellm_params:
+  #     model: openai/gpt-5
+  #     api_key: os.environ/OPENAI_API_KEY
+
+  # ---- Embeddings (for RAG / Qdrant) ----------------------------------------
+  #
+  # OpenWebUI uses an embedding model for its RAG pipeline. Pick one that
+  # matches your sovereignty preferences. Jina, Cohere, OpenAI, or local.
+  #
+  # - model_name: embeddings/default
+  #   litellm_params:
+  #     model: jina_ai/jina-embeddings-v3
+  #     api_key: os.environ/JINA_API_KEY
+
+litellm_settings:
+  # Track every request in the spend logs table. cost-tracker/ reads from this.
+  success_callback: ["postgres"]
+  # Cache identical requests for a few minutes — saves money on retries.
+  cache: true
+  cache_params:
+    type: redis
+    host: redis
+    port: 6379
+    password: os.environ/REDIS_PASSWORD
+    ttl: 300
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  # Each OpenWebUI user gets a virtual key with their own spend ledger. The
+  # cost-tracker reads "user" off the spend log row.
+  store_model_in_db: true
+  # Optional: set per-user budgets here once you've watched real usage for a
+  # month. Don't guess these from day one.
+  # max_budget: 100         # USD
+  # budget_duration: 30d

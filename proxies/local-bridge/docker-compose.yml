@@ -1,0 +1,21 @@
+name: local-bridge
+
+services:
+  local-bridge:
+    build: .
+    image: local-bridge:local
+    restart: unless-stopped
+    environment:
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://ollama:11434/v1}
+      BACKEND_API_KEY: ${BACKEND_API_KEY:-}
+      INCOMING_BEARER: ${INCOMING_BEARER}
+      MAX_TOKENS_CEILING: ${MAX_TOKENS_CEILING:-4096}
+      SYSTEM_PROMPT_PREFIX: ${SYSTEM_PROMPT_PREFIX:-}
+    networks:
+      - ai-bus      # gateway/ reaches us at http://local-bridge:8081
+      # If you also run an Ollama / vLLM container here, add its network too:
+      # - ollama_default
+
+networks:
+  ai-bus:
+    external: true

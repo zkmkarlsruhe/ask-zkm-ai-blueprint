@@ -1,0 +1,51 @@
+# Minimal Traefik configuration for the museum-ai-stack.
+#
+# This is the smallest reverse-proxy setup that fronts all three stacks
+# (gateway/, webui/, cost-tracker/) and provides:
+#   - TLS termination via ACME / Let's Encrypt
+#   - one shared "proxy" docker network
+#   - HTTP -> HTTPS redirect on the entrypoint
+#
+# Drop into its own /opt/docker/traefik/docker-compose.yml. Adjust the
+# email + DNS challenge config for your DNS provider, then bring it up
+# BEFORE the museum-ai-stack components so the "proxy" network exists.
+
+services:
+  traefik:
+    image: traefik:v3.4
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      - --entrypoints.websecure.http.tls.certresolver=letsencrypt
+      # Replace with your DNS provider for wildcard certs, or use HTTP-01:
+      - --certificatesresolvers.letsencrypt.acme.email=ops@your-house.org
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt:/letsencrypt
+    networks:
+      - proxy
+
+  # Optional: a BasicAuth middleware you can attach to anything via labels:
+  #   - traefik.http.routers.foo.middlewares=basic-auth@file
+  # Generate the bcrypt hash with:
+  #   htpasswd -nbB admin <password>     # then double the $ signs
+
+volumes:
+  letsencrypt: {}
+
+networks:
+  proxy:
+    external: true
