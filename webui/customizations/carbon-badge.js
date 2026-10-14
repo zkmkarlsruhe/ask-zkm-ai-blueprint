@@ -20,8 +20,8 @@
 
   // ---- CONFIG (edit for your house) ----------------------------------------
   // Public host of cost-tracker/ (CARBON_DOMAIN), never the dashboard host.
-  const CARBON_API = window.CARBON_API_BASE || 'https://carbon.example.org';
-  const CARBON_PUBLIC_URL = window.CARBON_PUBLIC_URL || 'https://carbon.example.org/carbon';
+  const CARBON_API = window.CARBON_API_BASE || 'https://carbon.zkm.tech';
+  const CARBON_PUBLIC_URL = window.CARBON_PUBLIC_URL || 'https://carbon.zkm.tech/carbon';
   const POLL_INTERVAL_MS = 30_000;
 
   // ---- USER ID DISCOVERY ---------------------------------------------------

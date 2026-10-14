@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup, Tag
 # Institution-specific, set via env. The defaults are placeholders, not a
 # working catalog: OPAC_BASE_URL is your aDISWeb app URL, OPAC_PROFILE the
 # catalog profile ("sp=" value of your OPAC's start link, e.g. SOPACnn).
-BASE_URL = os.getenv("OPAC_BASE_URL", "https://opac.example.org/aDISWeb/app")
+BASE_URL = os.getenv("OPAC_BASE_URL", "https://opac.zkm.tech/aDISWeb/app")
 OPAC_PROFILE = os.getenv("OPAC_PROFILE", "SOPAC00")
 START_PARAMS = f"service=direct/0/Home/$DirectLink&sp={OPAC_PROFILE}"
 

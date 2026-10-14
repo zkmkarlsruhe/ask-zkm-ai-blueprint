@@ -7,7 +7,7 @@ Two audiences, one app, two hostnames:
     /api/users/*    -> per-user spend API (names, emails, EUR)
     /static/*       -> dashboard assets
 
-  any other host (public, e.g. carbon.example.org)
+  any other host (public, e.g. carbon.zkm.tech)
     /carbon         -> public carbon page
     /api/carbon/*   -> public carbon API (badge + aggregated stats)
     /health

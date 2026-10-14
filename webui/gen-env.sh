@@ -7,11 +7,11 @@ set -euo pipefail
 
 read -rp "Instance name, lowercase (e.g. 'chat' or 'workshop'): " STACK
 read -rp "Display name (e.g. 'Acme Museum AI'): " WEBUI_NAME
-read -rp "Public URL (e.g. https://chat.acme.org): " WEBUI_URL
+read -rp "Public URL (e.g. https://chat.zkm.tech): " WEBUI_URL
 read -rp "Default locale [en]: " DEFAULT_LOCALE
 DEFAULT_LOCALE=${DEFAULT_LOCALE:-en}
 
-read -rp "Gateway base URL (LiteLLM /v1, e.g. https://api.acme.org/v1): " LITELLM_API_BASE
+read -rp "Gateway base URL (LiteLLM /v1, e.g. https://llm.zkm.tech/v1): " LITELLM_API_BASE
 read -rsp "Gateway virtual key (sk-...): " LITELLM_VIRTUAL_KEY
 echo
 

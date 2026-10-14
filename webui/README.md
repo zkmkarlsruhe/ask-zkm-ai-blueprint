@@ -29,7 +29,7 @@ First user to sign in becomes admin. After that, set `ENABLE_SIGNUP=false` in
 ## Wiring it to gateway/
 
 ```
-LITELLM_API_BASE=https://api.your-house.org/v1
+LITELLM_API_BASE=https://llm.zkm.tech/v1
 LITELLM_VIRTUAL_KEY=sk-...     # one key per instance, not the master key
 ```
 

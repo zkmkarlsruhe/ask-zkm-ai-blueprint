@@ -12,7 +12,7 @@ A checklist of what to swap, in roughly the order you'll need to swap it.
 - [ ] **Identity provider.** Whatever your institution already uses. If you
       don't have OIDC: this is a bigger project. Get OIDC first.
 - [ ] **Single domain or multiple?** The blueprint uses one host per
-      component. Many institutions prefer one apex (e.g. `ai.house.org`)
+      component. Many institutions prefer one apex (e.g. `ai.zkm.tech`)
       with subdomains. Both work; pick early.
 - [ ] **Hosting.** One docker host with 16-32 GB RAM and 200 GB SSD is
       sufficient for sub-1000-user installs. Add a GPU only if you run local

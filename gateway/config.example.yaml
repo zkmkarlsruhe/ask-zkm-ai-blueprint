@@ -38,20 +38,20 @@ model_list:
   # - model_name: house/academic-chat
   #   litellm_params:
   #     model: openai/<model-id-at-provider>
-  #     api_base: https://academic-cloud.example.eu/v1
+  #     api_base: https://academic-cloud.zkm.tech/v1
   #     api_key: os.environ/ACADEMIC_API_KEY_1
   #     rpm: 10                       # per-key limit; the router honours it
   # - model_name: house/academic-chat  # same alias, second key = more capacity
   #   litellm_params:
   #     model: openai/<model-id-at-provider>
-  #     api_base: https://academic-cloud.example.eu/v1
+  #     api_base: https://academic-cloud.zkm.tech/v1
   #     api_key: os.environ/ACADEMIC_API_KEY_2
   #     rpm: 10
   #
   # - model_name: house/eu-chat        # a commercial EU provider as fallback
   #   litellm_params:
   #     model: openai/<model-id-at-provider>
-  #     api_base: https://eu-provider.example.eu/v1
+  #     api_base: https://eu-provider.zkm.tech/v1
   #     api_key: os.environ/EU_PROVIDER_API_KEY
 
   # ---- Local / self-hosted (fully sovereign) --------------------------------

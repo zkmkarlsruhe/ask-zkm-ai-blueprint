@@ -16,7 +16,7 @@ The defaults are placeholders and do not reach a real catalog.
 
 | Variable | What | Example |
 |---|---|---|
-| `OPAC_BASE_URL` | the aDISWeb app URL | `https://bsz.ibs-bw.de/aDISWeb/app` (BSZ-hosted catalogs) |
+| `OPAC_BASE_URL` | the aDISWeb app URL | `https://opac.zkm.tech/aDISWeb/app` (BSZ-hosted catalogs) |
 | `OPAC_PROFILE` | your catalog profile: the `sp=` value in your OPAC's start link | `SOPACnn` |
 | `OPAC_CATALOG_NAME` | how the model should name the catalog | `Library of the Example Museum` |
 | `OPAC_CATALOG_FOCUS` | one phrase on what the collection holds | `art, media art and design literature` |

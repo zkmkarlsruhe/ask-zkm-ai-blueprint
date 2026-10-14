@@ -29,12 +29,12 @@ networks (`backend`, `webui_backend`) are created automatically per stack.
 ### gateway → webui
 
 In `gateway/`:
-- `GATEWAY_DOMAIN=api.your-house.org`
+- `GATEWAY_DOMAIN=llm.zkm.tech`
 - mint **one** virtual key for this OpenWebUI instance (`/key/generate`
   with the master key), scoped to the aliases the instance may use
 
 In `webui/.env`:
-- `LITELLM_API_BASE=https://api.your-house.org/v1`
+- `LITELLM_API_BASE=https://llm.zkm.tech/v1`
 - `LITELLM_VIRTUAL_KEY=sk-the-virtual-key`
 
 OpenWebUI now sees the aliases the key may call. Per-user spend is attributed

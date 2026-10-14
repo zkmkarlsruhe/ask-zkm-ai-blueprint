@@ -3,7 +3,7 @@
 # the public host. Needs no database.
 import os
 
-os.environ["DASHBOARD_HOST"] = "costs.example.org"
+os.environ["DASHBOARD_HOST"] = "costs.zkm.tech"
 os.environ.pop("LITELLM_DB_URL", None)
 os.environ.pop("OPENWEBUI_DB_URL", None)
 
@@ -21,8 +21,8 @@ assert format_co2(0.9996) == "1.00 kg"
 assert format_co2(2.7138, ",") == "2,71 kg"
 
 c = TestClient(app)
-pub = {"host": "carbon.example.org"}
-dash = {"host": "costs.example.org:443"}
+pub = {"host": "carbon.zkm.tech"}
+dash = {"host": "costs.zkm.tech:443"}
 
 # Per-person data never on the public host.
 assert c.get("/api/users/costs", headers=pub).status_code == 404

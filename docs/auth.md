@@ -32,7 +32,7 @@ Browser            OpenWebUI                     IdP                  gateway
 ## 1. Register an OIDC client in your IdP
 
 - **Client type**: confidential (has a client secret)
-- **Redirect URI**: `https://chat.your-house.org/oauth/oidc/callback`
+- **Redirect URI**: `https://chat.zkm.tech/oauth/oidc/callback`
 - **Scopes**: `openid`, `email`, `profile`, `groups`
 - **A `groups` claim** in the ID token / userinfo. In Keycloak: client-scope
   mapper "Group Membership", claim name `groups`, "Full group path" off
@@ -59,9 +59,9 @@ In `webui/.env` (mapped to OWUI's names in `webui/docker-compose.yml`):
 ```bash
 ENABLE_OAUTH_SIGNUP=true
 OIDC_PROVIDER_NAME=Institution SSO
-OIDC_CLIENT_ID=museum-ai
+OIDC_CLIENT_ID=chat
 OIDC_CLIENT_SECRET=<from step 1>
-OIDC_DISCOVERY_URL=https://sso.your-house.org/realms/main/.well-known/openid-configuration
+OIDC_DISCOVERY_URL=https://sso.zkm.tech/realms/example/.well-known/openid-configuration
 
 ENABLE_OAUTH_ROLE_MANAGEMENT=true     # role from the groups claim
 OAUTH_ALLOWED_ROLES=ai-user,ai-admin  # gate: no listed group, no account

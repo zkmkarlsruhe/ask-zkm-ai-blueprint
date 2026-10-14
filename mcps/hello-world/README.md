@@ -19,8 +19,8 @@ they can talk by service name:
 docker network connect webui_backend hello-world
 ```
 
-Then in OWUI: **Settings → Tools → "+"** with URL
-`http://hello-world:8000/mcp`.
+Then in OWUI: **Admin Panel → Settings → Integrations → Tool Servers → "+"**
+with URL `http://hello-world:8000/mcp`, type MCP (streamable HTTP).
 
 ## Use this as your starter
 

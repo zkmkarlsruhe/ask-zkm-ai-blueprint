@@ -15,7 +15,7 @@
   const LINKS = [
     { href: '/docs', label: 'Documentation' },
     { href: '/privacy', label: 'Privacy notice' },
-    { href: 'mailto:ai-support@example.org', label: 'Report a problem' },
+    { href: 'mailto:ai-support@zkm.tech', label: 'Report a problem' },
   ];
   const SIDEBAR_SELECTOR = 'aside, nav[role="navigation"], [data-sidebar]';
   const CONTAINER_ID = 'house-sidebar-links';

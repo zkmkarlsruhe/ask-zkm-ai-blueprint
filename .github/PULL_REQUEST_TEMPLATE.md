@@ -17,7 +17,7 @@ What problem does it solve? Link any related issue.
 This is a **reference implementation**, not a feature-rich product. Please
 confirm:
 
-- [ ] The change does not add ZKM-specific (or any institution-specific)
+- [ ] The change does not add institution-specific
       values to the public blueprint
 - [ ] No real secrets / hostnames / emails / spend numbers are introduced
 - [ ] If adding a new component or pattern, it's small enough that someone

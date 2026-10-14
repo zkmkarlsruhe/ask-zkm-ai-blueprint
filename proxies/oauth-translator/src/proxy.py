@@ -31,8 +31,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 # ---- CONFIG (edit / read from env) ---------------------------------------
-UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]      # e.g. "https://academic-cloud.example.eu/v1"
-TOKEN_URL = os.environ["UPSTREAM_TOKEN_URL"]             # e.g. "https://idp.example.eu/oauth2/token"
+UPSTREAM_BASE_URL = os.environ["UPSTREAM_BASE_URL"]      # e.g. "https://academic-cloud.zkm.tech/v1"
+TOKEN_URL = os.environ["UPSTREAM_TOKEN_URL"]             # e.g. "https://sso.zkm.tech/oauth2/token"
 CLIENT_ID = os.environ["UPSTREAM_CLIENT_ID"]
 CLIENT_SECRET = os.environ["UPSTREAM_CLIENT_SECRET"]
 SCOPE = os.environ.get("UPSTREAM_SCOPE", "")             # provider-specific
