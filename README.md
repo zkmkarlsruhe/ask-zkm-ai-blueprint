@@ -110,9 +110,7 @@ For real-world deployment (TLS, OIDC, Postgres, multi-tenancy) read
 
 ## Status & support
 
-This is a **reference implementation** published alongside our talk
-*"Prompting ohne schlechtes Gewissen"* at MAI-Tagung 2026 (Frankfurt, 28 May).
-We maintain it as a snapshot of what we run in production. We are happy to
+This is a **reference implementation**. We maintain it as a snapshot of what we run in production. We are happy to
 answer questions and accept pull requests, but offer no SLA and no support
 contract. If your house wants help adapting this, reach out — we are glad to
 talk.
@@ -124,6 +122,3 @@ MIT — see [LICENSE](LICENSE).
 ## Credits
 
 Marc Schütze | ZKM Karlsruhe.
-
-Published alongside the MAI-Tagung 2026 talk
-*"Prompting ohne schlechtes Gewissen"*.
