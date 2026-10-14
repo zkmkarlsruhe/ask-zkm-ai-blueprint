@@ -7,12 +7,15 @@ services:
     restart: unless-stopped
     environment:
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+      UPSTREAM_CONVERT_URL: ${UPSTREAM_CONVERT_URL:-}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-}
       LOG_LEVEL: INFO
     networks:
-      # Add to webui's backend network so OpenWebUI can call us by service name.
+      # Join webui's backend network so OpenWebUI reaches us as
+      # DOCLING_SERVER_URL=http://document-preprocessor:5001
       - webui_backend
 
 networks:
   webui_backend:
     external: true
-    # name: webui_backend     # adjust if your webui stack name is different
+    # name: webui_backend     # <STACK>_backend of your webui instance

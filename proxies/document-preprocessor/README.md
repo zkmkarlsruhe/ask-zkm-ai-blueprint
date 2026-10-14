@@ -1,75 +1,66 @@
 # document-preprocessor/
 
-A small HTTP service that converts uploaded office files to clean text (and
-optionally PDF) before they enter your RAG pipeline.
+A docling-serve-compatible shim: OpenWebUI sends uploads here for text
+extraction, the shim forwards them to wherever your real converter runs and
+returns markdown.
 
 ## Why
 
-When OpenWebUI ingests a `.docx` or scanned `.pdf`, what gets embedded is the
-raw bytes interpreted as text — often garbage. Embeddings of garbage match
-nothing useful. Pre-converting to clean markdown / plaintext makes the RAG
-results dramatically better.
+When OpenWebUI ingests a `.docx`, `.pptx` or scanned `.pdf` with its
+built-in loaders, layout, tables and scanned pages often come out as noise.
+A proper converter (docling, an OCR-capable convert API) produces clean
+markdown, and RAG over uploads gets dramatically better. Unhandled formats
+are worse than noisy: raw RTF markup, for example, gets chunked and embedded
+verbatim, poisoning the collection and loading the embedding provider.
 
-## What this skeleton does
+## The contract
 
-- Accepts `POST /convert` with a multipart file upload.
-- Validates type and size.
-- **Stubs the actual extraction** — see `src/proxy.py:_extract_text`.
+OpenWebUI with `CONTENT_EXTRACTION_ENGINE=docling` calls:
 
-## Wire in a real converter
-
-Two main options:
-
-### Option A: Docling (recommended for richness)
-
-```python
-# In _extract_text:
-from docling.document_converter import DocumentConverter
-result = DocumentConverter().convert(str(path))
-return {
-    "text": result.document.export_to_markdown(),
-    "pages": len(result.document.pages),
-    "metadata": {"source_format": suffix},
-}
+```
+POST {DOCLING_SERVER_URL}/v1/convert/file
+     multipart: files=<the upload>, to_formats=md,json, ...
+-> 200 {"status": "success", "document": {"md_content": "..."}}
 ```
 
-Add `"docling>=2.0"` to `pyproject.toml`. Heavy dep (PyTorch); image gets
-big. Worth it.
+Failures are reported inside a 200 with `"status": "failure"` and `errors[]`.
 
-### Option B: LibreOffice + pdfminer (lighter, slower)
+## Do you need this shim?
 
-```python
-# In _extract_text:
-import subprocess
-subprocess.run(
-    ["soffice", "--headless", "--convert-to", "pdf",
-     "--outdir", str(path.parent), str(path)],
-    check=True, timeout=120,
-)
-pdf_path = path.with_suffix(".pdf")
-from pdfminer.high_level import extract_text
-return {"text": extract_text(str(pdf_path)), "pages": -1, "metadata": {}}
+- **You can run docling-serve** (CPU works, GPU is faster): point
+  `DOCLING_SERVER_URL` straight at it. No shim.
+- **Conversion runs at a provider or on another box** with its own API shape
+  or its own key: run this shim. It speaks docling-serve to OpenWebUI and
+  your upstream's API on the other side, and keeps the upstream key out of
+  OpenWebUI. This is the reference deployment's setup: an academic cloud's
+  document-convert endpoint behind a shim like this one.
+
+Note that this path does not go through the LLM gateway: document
+conversion is not an OpenAI-shaped API. Its key and its traffic are a
+separate line in your data-flow inventory.
+
+## Configure
+
+```bash
+cp .env.example .env
+$EDITOR .env      # UPSTREAM_CONVERT_URL, UPSTREAM_API_KEY
+docker compose up -d
 ```
 
-Uncomment the LibreOffice apt-get line in `Dockerfile`.
+Adapt `_call_upstream` (request shape) and `_extract_markdown` (where the
+markdown is in the answer) in `src/proxy.py` to your upstream.
 
-## Wire it to OpenWebUI
+In `webui/` (or the admin UI, Documents):
 
-OWUI's document loaders are pluggable. The exact env vars vary per OWUI
-version, but the pattern is:
-
-1. Set OWUI's content extraction engine to "external".
-2. Point it at this service: `CONTENT_EXTRACTION_ENGINE_URL=http://document-preprocessor:8082/convert`
-3. Restart OWUI.
-
-Test by uploading a `.docx` to a chat — you should see clean text in the
-extracted content rather than binary noise.
+```
+CONTENT_EXTRACTION_ENGINE=docling
+DOCLING_SERVER_URL=http://document-preprocessor:5001
+```
 
 ## Test
 
 ```bash
-docker compose up -d
 echo "Hello world" > /tmp/test.txt
-curl -F "file=@/tmp/test.txt" http://localhost:8082/convert
-# -> {"text":"Hello world\n","pages":1,"metadata":{},"filename":"test.txt"}
+curl -F "files=@/tmp/test.txt" http://localhost:5001/v1/convert/file
+# -> {"status":"success","document":{"filename":"test.txt","md_content":"Hello world\n"}}
 ```

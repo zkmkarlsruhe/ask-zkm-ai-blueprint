@@ -1,4 +1,4 @@
-"""OPAC client for the BSZ/IBS aDISWeb library catalog system.
+"""OPAC client for aDISWeb library catalogs (e.g. the BSZ/IBS service).
 
 Handles session management, search submission, result parsing,
 and item detail retrieval by mimicking browser interactions.
@@ -6,16 +6,20 @@ and item detail retrieval by mimicking browser interactions.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from urllib.parse import urlsplit
 
 import httpx
 from bs4 import BeautifulSoup, Tag
 
-
-BASE_URL = "https://bsz.ibs-bw.de/aDISWeb/app"
-START_PARAMS = "service=direct/0/Home/$DirectLink&sp=SOPAC54"
+# Institution-specific, set via env. The defaults are placeholders, not a
+# working catalog: OPAC_BASE_URL is your aDISWeb app URL, OPAC_PROFILE the
+# catalog profile ("sp=" value of your OPAC's start link, e.g. SOPACnn).
+BASE_URL = os.getenv("OPAC_BASE_URL", "https://opac.example.org/aDISWeb/app")
+OPAC_PROFILE = os.getenv("OPAC_PROFILE", "SOPAC00")
+START_PARAMS = f"service=direct/0/Home/$DirectLink&sp={OPAC_PROFILE}"
 
 # Search field categories available in the advanced search
 SEARCH_CATEGORIES = {
@@ -194,7 +198,7 @@ class ItemDetail:
 
 
 class OPACClient:
-    """Client for the BSZ/IBS aDISWeb OPAC system.
+    """Client for an aDISWeb OPAC system.
 
     Manages HTTP sessions and provides methods for searching the catalog,
     navigating results, and retrieving item details.
@@ -203,6 +207,9 @@ class OPACClient:
     def __init__(self, base_url: str = BASE_URL, start_params: str = START_PARAMS):
         self.base_url = base_url
         self.start_params = start_params
+        parts = urlsplit(base_url)
+        self.origin = f"{parts.scheme}://{parts.netloc}"  # form actions are host-relative
+        self.home_url = f"{base_url}?{start_params}"
         self._client = httpx.Client(
             follow_redirects=True,
             timeout=30.0,
@@ -215,7 +222,7 @@ class OPACClient:
         self._request_count: int = 0
         self._current_service: str = ""
         self._current_action: str = ""
-        self._current_soup: Optional[BeautifulSoup] = None
+        self._current_soup: BeautifulSoup | None = None
         self._on_results_page: bool = False
         self._on_detail_page: bool = False
         self._initialized: bool = False
@@ -301,7 +308,7 @@ class OPACClient:
         data["scriptEnabled"] = "true"
         # Do NOT increment requestCount - use the value already in the form data
 
-        url = f"https://bsz.ibs-bw.de{self._current_action}"
+        url = f"{self.origin}{self._current_action}"
         resp = self._client.post(url, data=data)
         resp.raise_for_status()
 
@@ -397,7 +404,7 @@ class OPACClient:
 
         return response
 
-    def _parse_result_item(self, item: Tag) -> Optional[SearchResult]:
+    def _parse_result_item(self, item: Tag) -> SearchResult | None:
         """Parse a single result list item.
 
         Uses the structured CSS grid layout where available:
@@ -450,7 +457,9 @@ class OPACClient:
                     if child == br or (isinstance(child, Tag) and child.name == "br"):
                         found_br = True
                         continue
-                    text = child.get_text(strip=True) if isinstance(child, Tag) else str(child).strip()
+                    text = (
+                        child.get_text(strip=True) if isinstance(child, Tag) else str(child).strip()
+                    )
                     if text:
                         if found_br:
                             parts_after.append(text)
@@ -540,8 +549,6 @@ class OPACClient:
                 if th and td and isinstance(th, Tag) and isinstance(td, Tag):
                     label = th.get_text(strip=True)
                     # For values, preserve line breaks as separators
-                    # Links in td may contain structured data
-                    value_parts = []
                     for br in td.find_all("br"):
                         br.replace_with(" ; ")
                     value = td.get_text(strip=True)
@@ -608,16 +615,9 @@ class OPACClient:
             k10_match = re.search(r"([0-9A-Za-z]+)\s*\(K10Plus", k10plus)
             if k10_match:
                 k10_id = k10_match.group(1)
-                detail.link = (
-                    f"https://bsz.ibs-bw.de/aDISWeb/app?"
-                    f"service=direct/0/Home/$DirectLink&sp=SOPAC54"
-                    f"&sp=SAKSWB-IdNr{k10_id}"
-                )
+                detail.link = f"{self.home_url}&sp=SAKSWB-IdNr{k10_id}"
             else:
-                detail.link = (
-                    f"https://bsz.ibs-bw.de/aDISWeb/app?"
-                    f"service=direct/0/Home/$DirectLink&sp=SOPAC54"
-                )
+                detail.link = self.home_url
 
         self._on_detail_page = True
         self._on_results_page = False
@@ -665,7 +665,9 @@ class OPACClient:
             # The search redirected to advanced search - this happens with empty queries
             # Try submitting from the advanced search form
             return SearchResponse(
-                query_description=f"Search for '{query}' returned no results or redirected to advanced search"
+                query_description=(
+                    f"Search for '{query}' returned no results or redirected to advanced search"
+                )
             )
         else:
             # Single result might go directly to detail
@@ -903,9 +905,6 @@ class OPACClient:
 
         soup = self._navigate_link(item_id)
 
-        title_el = soup.find("title")
-        title = title_el.get_text(strip=True) if title_el else ""
-
         detail = self._parse_detail(soup, item_id)
         detail.link = self._get_item_link(item_id)
 
@@ -997,7 +996,7 @@ class OPACClient:
         data = self._collect_form_data(self._current_soup)
         data[button_name] = EXPORT_FORMATS[fmt]
 
-        url = f"https://bsz.ibs-bw.de{self._current_action}"
+        url = f"{self.origin}{self._current_action}"
         data["scriptEnabled"] = "true"
         resp = self._client.post(url, data=data)
         resp.raise_for_status()
@@ -1048,7 +1047,7 @@ class OPACClient:
         data = self._collect_form_data(self._current_soup)
         data[button_name] = EXPORT_FORMATS[fmt]
 
-        url = f"https://bsz.ibs-bw.de{self._current_action}"
+        url = f"{self.origin}{self._current_action}"
         data["scriptEnabled"] = "true"
         resp = self._client.post(url, data=data)
         resp.raise_for_status()
@@ -1119,8 +1118,6 @@ class OPACClient:
 
         Looks for the K10Plus number or item reference on the page.
         """
-        # Try to find from page text or metadata
-        page_text = soup.get_text()
         # Look for item ID in the page title or header
         title_div = soup.select_one("#R27")
         if title_div:
@@ -1148,10 +1145,7 @@ class OPACClient:
         Note: aDISWeb doesn't support stable deep links to items.
         This returns a link to start a search that should find the item.
         """
-        return (
-            f"https://bsz.ibs-bw.de/aDISWeb/app?"
-            f"service=direct/0/Home/$DirectLink&sp=SOPAC54"
-        )
+        return self.home_url
 
     def get_search_link(self, query: str) -> str:
         """Get a link to the OPAC for manual searching.
@@ -1162,10 +1156,7 @@ class OPACClient:
         Returns:
             URL to the OPAC catalog.
         """
-        return (
-            f"https://bsz.ibs-bw.de/aDISWeb/app?"
-            f"service=direct/0/Home/$DirectLink&sp=SOPAC54"
-        )
+        return self.home_url
 
     def get_available_categories(self) -> dict[str, str]:
         """Return available search categories."""

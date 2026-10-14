@@ -5,7 +5,7 @@ description = "Minimal FastMCP starter — copy and rename to build your own."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
-    "fastmcp>=2.14.5",
+    "fastmcp>=4.0.10",
 ]
 
 [project.scripts]

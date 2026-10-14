@@ -1,6 +1,6 @@
-"""FastMCP server for querying the ZKM/HfG Karlsruhe OPAC library catalog.
+"""FastMCP server for querying an aDISWeb OPAC library catalog.
 
-Provides tools for searching the BSZ/IBS aDISWeb OPAC system, navigating
+Provides tools for searching an aDISWeb OPAC (e.g. the BSZ/IBS service), navigating
 results, and retrieving detailed metadata for catalog items.
 
 Runs as an HTTP server (streamable HTTP transport) for production deployment.
@@ -15,9 +15,12 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
 
 from .client import (
     AVAILABILITY,
+    BASE_URL,
     EXPORT_FORMATS,
     LANGUAGES,
     MEDIA_TYPES,
@@ -26,6 +29,7 @@ from .client import (
     SEARCH_CATEGORIES,
     SEARCH_SCOPES,
     SORT_OPTIONS,
+    START_PARAMS,
     OPACClient,
 )
 
@@ -43,6 +47,13 @@ logger = logging.getLogger(__name__)
 # Server configuration from environment
 SERVER_HOST = os.getenv("MCP_HOST", "0.0.0.0")
 SERVER_PORT = int(os.getenv("MCP_PORT", "8000"))
+
+# Institution-specific wording for the model. Set via env.
+CATALOG_NAME = os.getenv("OPAC_CATALOG_NAME") or "the library catalog"
+CATALOG_FOCUS = (
+    os.getenv("OPAC_CATALOG_FOCUS")
+    or "books, journals, exhibition catalogs, e-books, films, audio recordings, and more"
+)
 
 
 @asynccontextmanager
@@ -66,8 +77,7 @@ async def lifespan(app: FastMCP):
 mcp = FastMCP(
     "opac",
     instructions=(
-        "OPAC library catalog search for ZKM | Zentrum für Kunst und Medien Karlsruhe "
-        "and HfG Staatliche Hochschule für Gestaltung Karlsruhe. "
+        f"OPAC library catalog search for {CATALOG_NAME}. "
         "Use 'opac_search' for quick free-text searches across all fields. "
         "Use 'opac_advanced_search' to search specific fields (author, title, subject, "
         "ISBN, etc.) with boolean operators and filters for media type, language, year, "
@@ -80,11 +90,16 @@ mcp = FastMCP(
         "Use 'opac_next_record' / 'opac_previous_record' to step through items on the "
         "detail page without returning to the list. "
         "Use 'opac_back_to_results' to return to the list after viewing details. "
-        "The catalog contains books, journals, exhibition catalogs, e-books, "
-        "films, audio recordings, and more focused on art, media art, and design."
+        f"The catalog contains {CATALOG_FOCUS}."
     ),
     lifespan=lifespan,
 )
+
+@mcp.custom_route("/health", methods=["GET", "HEAD"])
+async def health(_: Request) -> PlainTextResponse:
+    """Liveness probe for the Docker HEALTHCHECK."""
+    return PlainTextResponse("ok")
+
 
 # Global client instance (stateful - maintains OPAC session)
 _client: OPACClient | None = None
@@ -99,7 +114,7 @@ def _get_client() -> OPACClient:
 
 @mcp.tool()
 def opac_search(query: str, scope: str = "all") -> dict[str, Any]:
-    """Search the ZKM/HfG library catalog with a free-text query.
+    """Search the library catalog with a free-text query.
 
     Searches across all fields (title, author, subject, etc.) using the
     library's built-in relevance ranking. Supports word stemming (e.g.,
@@ -474,8 +489,8 @@ def opac_search_options() -> dict[str, Any]:
         "availability": AVAILABILITY,
         "sort_options": list(SORT_OPTIONS.keys()),
         "export_formats": list(EXPORT_FORMATS.keys()),
-        "catalog_name": "ZKM | Zentrum für Kunst und Medien & HfG Karlsruhe",
-        "catalog_url": "https://bsz.ibs-bw.de/aDISWeb/app?service=direct/0/Home/$DirectLink&sp=SOPAC54",
+        "catalog_name": CATALOG_NAME,
+        "catalog_url": f"{BASE_URL}?{START_PARAMS}",
     }
 
 

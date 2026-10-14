@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastmcp import FastMCP
 
@@ -41,7 +41,7 @@ def echo(message: str) -> dict:
 @mcp.tool()
 def now() -> dict:
     """Return the current UTC time in ISO 8601 format."""
-    return {"utc": datetime.now(timezone.utc).isoformat()}
+    return {"utc": datetime.now(UTC).isoformat()}
 
 
 def main() -> None:

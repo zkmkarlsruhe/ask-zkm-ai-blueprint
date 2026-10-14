@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -40,7 +39,7 @@ SCOPE = os.environ.get("UPSTREAM_SCOPE", "")             # provider-specific
 SHARED_SECRET = os.environ["INCOMING_BEARER"]            # the token LiteLLM uses to call this proxy
 
 # ---- TOKEN CACHE ---------------------------------------------------------
-_token: Optional[str] = None
+_token: str | None = None
 _expires_at: float = 0.0
 _client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
 

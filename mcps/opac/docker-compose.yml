@@ -11,6 +11,11 @@ services:
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8000"
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Your catalog. Placeholders by default; see README.
+      OPAC_BASE_URL: ${OPAC_BASE_URL:-https://opac.example.org/aDISWeb/app}
+      OPAC_PROFILE: ${OPAC_PROFILE:-SOPAC00}
+      OPAC_CATALOG_NAME: ${OPAC_CATALOG_NAME:-the library catalog}
+      OPAC_CATALOG_FOCUS: ${OPAC_CATALOG_FOCUS:-}
     ports:
       - "${MCP_PORT:-8002}:8000"   # remove in production; expose via docker network instead
     healthcheck:
