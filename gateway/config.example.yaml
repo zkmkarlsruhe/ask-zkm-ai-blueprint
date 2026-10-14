@@ -1,87 +1,137 @@
 # LiteLLM proxy configuration — example.
 #
-# This is the file that decides which model providers your institution uses.
-# Each entry under model_list becomes a model id that OpenWebUI (and anything
-# else hitting the gateway) can request.
+# This file decides how the gateway behaves. Which upstream models exist is a
+# separate question: you can list them under model_list below, or (as the
+# reference deployment does) keep model_list empty and manage every model,
+# alias, credential and fallback through LiteLLM's admin API / UI with
+# store_model_in_db: true. See ../docs/aliases.md.
 #
 # The four guarantees in practice:
 #   - Sovereignty: prefer EU / academic providers; mark commercial ones clearly.
-#   - Cost: every entry inherits per-user spend tracking via virtual keys.
-#   - All-traffic-through-one-door: don't let OpenWebUI talk to providers
-#     directly. Only the gateway has provider keys.
+#   - Cost: one virtual key per chat instance; OpenWebUI forwards the user id
+#     in a header, LiteLLM attributes every spend row to that user.
+#   - All traffic through one door: OpenWebUI never holds provider keys.
 #
-# All entries below are commented stubs — uncomment and fill in for your house.
 # Full provider list and parameter reference:
 #   https://docs.litellm.ai/docs/providers
+
+# ---------------------------------------------------------------------------
+# Models — alias first.
+#
+# Consumers (OpenWebUI, scripts, artworks) request a stable, version-less
+# alias like house/academic-chat, never a raw vendor model name. When a
+# provider retires a model, you repoint the alias; no consumer changes.
+#
+# Convention: house/<provider>-<role>, e.g. house/academic-chat,
+# house/eu-reason, house/us-sonnet. Several deployment rows may share one
+# model_name; the router load-balances across them (useful when you hold
+# several API keys for the same provider, each with its own rpm limit).
+# ---------------------------------------------------------------------------
 
 model_list:
 
   # ---- EU / academic providers (preferred) ----------------------------------
   #
-  # Many EU national research clouds expose an OpenAI-compatible endpoint.
-  # Examples we've seen: GWDG SAIA (Germany), various university HPC gateways.
+  # Many EU research clouds expose an OpenAI-compatible endpoint.
   # Pattern: openai/<their-model-id> with a custom api_base.
   #
-  # - model_name: academic/llama-3.3-70b
+  # - model_name: house/academic-chat
   #   litellm_params:
-  #     model: openai/meta-llama-3.3-70b-instruct
-  #     api_base: https://your-academic-cloud.example.eu/v1
-  #     api_key: os.environ/ACADEMIC_API_KEY
+  #     model: openai/<model-id-at-provider>
+  #     api_base: https://academic-cloud.example.eu/v1
+  #     api_key: os.environ/ACADEMIC_API_KEY_1
+  #     rpm: 10                       # per-key limit; the router honours it
+  # - model_name: house/academic-chat  # same alias, second key = more capacity
+  #   litellm_params:
+  #     model: openai/<model-id-at-provider>
+  #     api_base: https://academic-cloud.example.eu/v1
+  #     api_key: os.environ/ACADEMIC_API_KEY_2
+  #     rpm: 10
+  #
+  # - model_name: house/eu-chat        # a commercial EU provider as fallback
+  #   litellm_params:
+  #     model: openai/<model-id-at-provider>
+  #     api_base: https://eu-provider.example.eu/v1
+  #     api_key: os.environ/EU_PROVIDER_API_KEY
 
   # ---- Local / self-hosted (fully sovereign) --------------------------------
   #
-  # If you run Ollama, vLLM, or text-generation-inference on a GPU box, point
-  # at it here. Zero external traffic, zero per-token cost, full data control.
-  #
-  # - model_name: local/llama-3.1-8b
+  # - model_name: house/local-chat
   #   litellm_params:
-  #     model: ollama/llama3.1:8b
+  #     model: ollama/<model>
   #     api_base: http://your-ollama-host:11434
 
   # ---- Commercial providers (deliberate choice) -----------------------------
   #
-  # Make these visibly different in OpenWebUI (e.g. prefix with "us/" or
-  # "commercial/") so users know they're stepping outside the sovereign path.
+  # Make these visibly different in OpenWebUI (tags, display names) so users
+  # know they are stepping outside the sovereign path.
   #
-  # - model_name: us/claude-sonnet-4-5
+  # - model_name: house/us-sonnet
   #   litellm_params:
-  #     model: anthropic/claude-sonnet-4-5
+  #     model: anthropic/<current-sonnet-model>
   #     api_key: os.environ/ANTHROPIC_API_KEY
-  #
-  # - model_name: us/gpt-5
-  #   litellm_params:
-  #     model: openai/gpt-5
-  #     api_key: os.environ/OPENAI_API_KEY
 
-  # ---- Embeddings (for RAG / Qdrant) ----------------------------------------
+  # ---- Embeddings + rerank (for RAG) ----------------------------------------
   #
-  # OpenWebUI uses an embedding model for its RAG pipeline. Pick one that
-  # matches your sovereignty preferences. Jina, Cohere, OpenAI, or local.
+  # Embedding and rerank aliases NEVER get a fallback: a different embedding
+  # model produces vectors of a different space (often a different
+  # dimension) and silently corrupts every collection in the vector DB.
   #
-  # - model_name: embeddings/default
+  # - model_name: house/embed
   #   litellm_params:
-  #     model: jina_ai/jina-embeddings-v3
+  #     model: jina_ai/<embedding-model>
+  #     api_key: os.environ/JINA_API_KEY
+  # - model_name: house/rerank
+  #   litellm_params:
+  #     model: jina_ai/<reranker-model>
   #     api_key: os.environ/JINA_API_KEY
 
+router_settings:
+  # Honours per-deployment rpm/tpm. With several keys behind one alias, this
+  # spreads load instead of hammering the first key into 429s.
+  routing_strategy: usage-based-routing-v2
+  # Retry a 429 / timeout on another deployment of the same alias.
+  num_retries: 2
+  # Fallback chains: when every deployment of an alias fails, try the next
+  # alias. Rules: different provider, same mode (chat->chat), no cycles,
+  # never for embedding/rerank. Can also be set via the admin API, in which
+  # case they live in the DB and this block is only the bootstrap value.
+  # fallbacks:
+  #   - {"house/academic-chat": ["house/eu-chat"]}
+
 litellm_settings:
-  # Track every request in the spend logs table. cost-tracker/ reads from this.
-  success_callback: ["postgres"]
-  # Cache identical requests for a few minutes — saves money on retries.
-  cache: true
-  cache_params:
-    type: redis
-    host: redis
-    port: 6379
-    password: os.environ/REDIS_PASSWORD
-    ttl: 300
+  request_timeout: 600
+  json_logs: true
+  # Silently drop OpenAI-style params an upstream does not support instead of
+  # failing the request (many vLLM-based endpoints are strict).
+  drop_params: true
+  # Write these OpenWebUI headers as tags into every spend-log row, so spend
+  # can be grouped by email, role or chat later. Requires
+  # ENABLE_FORWARD_USER_INFO_HEADERS=true in webui/.
+  extra_spend_tag_headers:
+    - "X-OpenWebUI-User-Email"
+    - "X-OpenWebUI-User-Role"
+    - "X-OpenWebUI-Chat-Id"
+  # Custom hooks, baked into a custom image (see Dockerfile.example and
+  # hooks/). Format: <module>.<instance>.
+  # callbacks: ["example_hook.embedding_usage_fix_hook"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
-  # Each OpenWebUI user gets a virtual key with their own spend ledger. The
-  # cost-tracker reads "user" off the spend log row.
+  # Models, aliases, credentials and fallbacks are editable via the admin
+  # API without a restart. Trade-off: the DB becomes the source of truth for
+  # them, so back it up like application data.
   store_model_in_db: true
-  # Optional: set per-user budgets here once you've watched real usage for a
-  # month. Don't guess these from day one.
-  # max_budget: 100         # USD
-  # budget_duration: 30d
+  # Batch spend-log writes (seconds) instead of one write per request.
+  proxy_batch_write_at: 60
+  # Admin UI login only for DB users, not the master key / env credentials.
+  disable_env_credential_login: true
+  # Per-user attribution: one virtual key per chat instance, and OpenWebUI
+  # forwards the logged-in user's id in this header. LiteLLM records it as
+  # the spend row's "user" — which cost-tracker/ joins against.
+  user_header_mappings:
+    - header_name: X-OpenWebUI-User-Id
+      litellm_user_role: internal_user
+  # Budgets: the reference deployment tracks spend but sets no budgets.
+  # If you need a hard cap, put max_budget on a specific virtual key.

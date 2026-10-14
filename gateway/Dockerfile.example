@@ -1,0 +1,24 @@
+# Custom gateway image: upstream LiteLLM + your config + your hooks.
+#
+# Why bake instead of bind-mount: hook modules are Python imports. A syntax
+# error or a missing dependency in one hook disables the whole callback chain
+# at runtime, often silently. Importing every hook at build time turns that
+# into a failed build.
+#
+# Pin the base by tag AND digest in production and let Renovate bump both:
+#   FROM ghcr.io/berriai/litellm:v1.104.0@sha256:<digest>
+FROM ghcr.io/berriai/litellm:v1.104.0
+
+# Extra Python deps for your hooks, pinned. The image ships a uv-built venv
+# without pip on PATH; bootstrap it first.
+# RUN python3 -m ensurepip --upgrade \
+#  && python3 -m pip install --no-cache-dir --disable-pip-version-check "langdetect==1.0.9"
+
+COPY config.yaml /app/config/config.yaml
+COPY hooks/ /app/config/
+
+# Import smoke test: every hook module must import cleanly.
+RUN python3 -c "import sys; sys.path.insert(0, '/app/config'); import example_hook; print('hooks OK')"
+
+# Behaviour smoke test for hooks with pure logic: assert, don't just import.
+RUN python3 -c "import sys; sys.path.insert(0, '/app/config'); from example_hook import fix_embedding_usage as f; from litellm.types.utils import EmbeddingResponse, Usage; r = f(EmbeddingResponse(usage=Usage(total_tokens=9))); assert r.usage.prompt_tokens == 9, r.usage; print('embedding usage fix OK')"
