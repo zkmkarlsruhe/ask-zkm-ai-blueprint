@@ -155,8 +155,12 @@
                 <div class="summary-value" id="totalUsers">0</div>
             </div>
             <div class="summary-item">
-                <div class="summary-label">Total Cost</div>
-                <div class="summary-value" id="totalCost">$0.00</div>
+                <div class="summary-label">Cost (invoiced)</div>
+                <div class="summary-value" id="totalCost">€0.00</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-label">Cost (shadow)</div>
+                <div class="summary-value" id="totalShadow">€0.00</div>
             </div>
             <div class="summary-item">
                 <div class="summary-label">Total Requests</div>
@@ -179,7 +183,8 @@
                     <th>Email</th>
                     <th>Name</th>
                     <th>Role</th>
-                    <th>Cost (USD)</th>
+                    <th>Invoiced (EUR)</th>
+                    <th>Shadow (EUR)</th>
                     <th>Requests</th>
                     <th>Total Tokens</th>
                     <th>Prompt Tokens</th>
@@ -246,12 +251,14 @@
                 const data = await response.json();
                 
                 // Update summary
-                const totalCost = data.reduce((sum, row) => sum + row.total_cost_usd, 0);
+                const totalCost = data.reduce((sum, row) => sum + row.invoiced_cost_eur, 0);
+                const totalShadow = data.reduce((sum, row) => sum + row.shadow_cost_eur, 0);
                 const totalRequests = data.reduce((sum, row) => sum + row.total_requests, 0);
                 const totalTokens = data.reduce((sum, row) => sum + row.total_tokens, 0);
                 
                 document.getElementById('totalUsers').textContent = data.length;
-                document.getElementById('totalCost').textContent = '$' + totalCost.toFixed(4);
+                document.getElementById('totalCost').textContent = '€' + totalCost.toFixed(4);
+                document.getElementById('totalShadow').textContent = '€' + totalShadow.toFixed(4);
                 document.getElementById('totalRequests').textContent = totalRequests.toLocaleString();
                 document.getElementById('totalTokens').textContent = totalTokens.toLocaleString();
                 document.getElementById('summary').style.display = 'flex';
@@ -271,7 +278,8 @@
                         <td>${row.email}</td>
                         <td>${row.name}</td>
                         <td>${row.role}</td>
-                        <td>$${row.total_cost_usd.toFixed(6)}</td>
+                        <td>€${row.invoiced_cost_eur.toFixed(6)}</td>
+                        <td>€${row.shadow_cost_eur.toFixed(6)}</td>
                         <td>${row.total_requests}</td>
                         <td>${row.total_tokens.toLocaleString()}</td>
                         <td>${row.prompt_tokens.toLocaleString()}</td>

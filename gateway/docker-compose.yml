@@ -16,7 +16,8 @@ name: gateway
 #   - "proxy" is your reverse-proxy network (Traefik, Caddy, nginx). Create it
 #     once: `docker network create proxy`.
 #   - "backend" is internal, for litellm <-> postgres <-> redis traffic.
-#   - "ai-bus" is shared with webui/ and cost-tracker/. Create it once:
+#   - "ai-bus" is shared with webui/ and cost-tracker/ for DB reads; only
+#     this stack's postgres joins it (alias litellm-db). Create it once:
 #     `docker network create ai-bus`.
 
 services:
@@ -63,9 +64,9 @@ services:
       retries: 3
       start_period: 60s
     networks:
+      # Not on ai-bus: there, "postgres" could resolve to another stack's DB.
       - proxy
       - backend
-      - ai-bus
     labels:
       - traefik.enable=true
       - traefik.http.routers.litellm.rule=Host(`${GATEWAY_DOMAIN}`)
@@ -89,8 +90,11 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - backend
-      - ai-bus  # exposed to ai-bus so cost-tracker/ can read spend logs
+      backend: {}
+      ai-bus:
+        # Unique name on the shared network: cost-tracker/ reads spend logs
+        # here. webui/'s Postgres is on ai-bus too, as <STACK>-db.
+        aliases: [litellm-db]
 
   redis:
     image: redis:8.10.2-alpine

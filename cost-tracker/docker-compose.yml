@@ -1,10 +1,15 @@
 name: cost-tracker
 
-# Joins LiteLLM spend logs with OpenWebUI users to produce per-person spend
-# attribution and a public CO2 dashboard. Reads two Postgres databases
-# directly — both must be reachable on the "ai-bus" network shared with
-# gateway/ (which owns LiteLLM's DB) and webui/ (which owns OWUI's DB,
-# only if you've upgraded webui from sqlite to postgres).
+# Joins LiteLLM spend logs with OpenWebUI users for per-person spend
+# attribution, and serves a public CO2 page + API. Reads two Postgres
+# databases directly over the shared "ai-bus" network: gateway/ (LiteLLM)
+# and webui/ (OpenWebUI).
+#
+# Two hostnames on purpose:
+#   COST_DOMAIN    dashboard + per-user API. Put auth in front of it.
+#   CARBON_DOMAIN  public carbon page + API. No auth.
+# The app itself refuses per-user routes on any host but COST_DOMAIN
+# (DASHBOARD_HOST), so a wrong router rule cannot leak staff spend.
 
 services:
   cost-tracker:
@@ -17,21 +22,22 @@ services:
       LITELLM_DB_URL: ${LITELLM_DB_URL}
       OPENWEBUI_DB_URL: ${OPENWEBUI_DB_URL}
       CO2_PER_1K_TOKENS: ${CO2_PER_1K_TOKENS:-0.0004}
+      DASHBOARD_HOST: ${COST_DOMAIN}
+      SHADOW_API_BASE_RE: ${SHADOW_API_BASE_RE:-}
     networks:
       - proxy
       - ai-bus
     labels:
       - traefik.enable=true
-      # The dashboard at "/" — protect this with whatever middleware your
-      # reverse proxy provides (BasicAuth, OIDC, IP allowlist).
-      - traefik.http.routers.cost-dashboard.rule=Host(`${COST_DOMAIN}`) && !PathPrefix(`/carbon`) && !PathPrefix(`/api/carbon`)
+      # Dashboard + per-user API — protect this with whatever middleware your
+      # reverse proxy provides (BasicAuth, OIDC forward-auth, IP allowlist).
+      - traefik.http.routers.cost-dashboard.rule=Host(`${COST_DOMAIN}`)
       - traefik.http.routers.cost-dashboard.entrypoints=websecure
       - traefik.http.routers.cost-dashboard.tls=true
-      # Add your auth middleware here, e.g.:
       # - traefik.http.routers.cost-dashboard.middlewares=basic-auth@file
       - traefik.http.routers.cost-dashboard.service=cost-tracker
-      # The carbon page + API at "/carbon" — public, no auth.
-      - traefik.http.routers.carbon-public.rule=Host(`${COST_DOMAIN}`) && (PathPrefix(`/carbon`) || PathPrefix(`/api/carbon`))
+      # Public carbon page + API — only these paths are routed at all.
+      - traefik.http.routers.carbon-public.rule=Host(`${CARBON_DOMAIN}`) && (Path(`/`) || PathPrefix(`/carbon`) || PathPrefix(`/api/carbon`) || Path(`/health`))
       - traefik.http.routers.carbon-public.entrypoints=websecure
       - traefik.http.routers.carbon-public.tls=true
       - traefik.http.routers.carbon-public.service=cost-tracker

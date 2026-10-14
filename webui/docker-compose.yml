@@ -163,9 +163,11 @@ services:
       retries: 5
       start_period: 60s
     networks:
-      - backend
-      # cost-tracker/ reads the user table (names for the spend dashboard).
-      - ai-bus
+      backend: {}
+      ai-bus:
+        # cost-tracker/ reads the user table (names for the spend dashboard).
+        # Unique alias: every stack's DB service is called "postgres".
+        aliases: ["${STACK:-webui}-db"]
 
   qdrant:
     image: qdrant/qdrant:v1.19.2

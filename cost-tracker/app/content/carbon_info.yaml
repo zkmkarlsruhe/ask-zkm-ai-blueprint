@@ -1,0 +1,87 @@
+# Content for the public carbon page (/carbon).
+#
+# This YAML is the only file you need to edit to change what users see.
+# main.py loads it at startup; templates/carbon_info.html renders it.
+# Lines marked EDIT are house-specific: replace them before going live.
+#
+# Markdown is NOT rendered. Keep values as plain text. Multi-line strings
+# work as YAML literal (|) or folded (>) blocks.
+#
+# Keep it factual: no numbers that are not backed by the gateway data or the
+# configured factor.
+
+lang: "en"
+# Decimal separator for CO2 amounts on this page ("." or ",").
+decimal_separator: "."
+
+hero:
+  title: "CO₂ estimate for our AI assistant"   # EDIT: name your service
+  # Shown under the number when the page is opened from the badge (?amount=).
+  subtitle: "Estimated CO₂ of your use of the assistant today"
+  # Shown when the page is opened without an amount.
+  subtitle_without_amount: "How we estimate the CO₂ of our AI chat, and where that estimate ends."
+
+# Cards in a grid, rendered in this order. Each card: title, intro, optional
+# list_heading + list, optional outro. The card with co2_factor_label also
+# shows the live CO2_PER_1K_TOKENS value.
+cards:
+  what_is_this:
+    title: "What is counted?"
+    intro: "Every request to a language model passes through one central gateway. The gateway records how many tokens each request processed. This page turns that token count into a CO₂ estimate."
+    list_heading: "Basics"
+    list:
+      - "Tokens are pieces of text, roughly syllables or short words. Language models read and write text in tokens."
+      - "Counted are input tokens (your message, the chat history so far, attached documents, search results) and output tokens (the model's answer)."
+      - "The number in the CO₂ badge of the chat applies to your own use today."
+      - "EDIT: Name the providers your models run on, in order of preference, and how users recognise the ones outside your sovereignty target."
+    outro: "This page shows no request content and no data about individual people."
+
+  why_guesswork:
+    title: "Why only an approximation?"
+    intro: "These numbers are an estimate, not a measurement. We do not know the actual energy use of individual requests."
+    list_heading: "What we do not know"
+    list:
+      - "No provider publishes energy use per request. We only see the number of tokens."
+      - "The electricity mix of data centres differs and changes over time. The same computation causes different emissions on hydro power than on coal."
+      - "Models differ widely in size and hardware. A large model needs more compute per token than a small one. The estimate still uses one factor for all models."
+      - "Model training, hardware manufacturing, cooling, idle servers and data transfer are not counted separately."
+    outro: "Input tokens are the largest share: with every new message, the whole chat history including attachments is sent to the model again. The token count of a chat therefore grows much faster than the length of its answers."
+
+  methodology:
+    title: "How it is calculated"
+    intro: "The calculation is deliberately simple: number of tokens divided by 1,000, multiplied by a fixed factor."
+    list_heading: "Method"
+    list:
+      - "Token counts come from the gateway's billing data, input and output together."
+      - "CO₂ = tokens ÷ 1,000 × factor"
+      - "EDIT: State where your factor comes from (internal estimate, measurement of your own GPUs, provider data)."
+    # The factor line is rendered by the template from the live value of the
+    # CO2_PER_1K_TOKENS env var. Edit the label here; the number comes from env.
+    co2_factor_label: "Current factor"
+    co2_factor_unit: "CO₂ per 1,000 tokens"
+    outro: "If the factor changes, all displayed values change retroactively, because they are recalculated from the token counts on every request."
+
+  what_you_can_do:
+    title: "What you can do"
+    intro: "The number of tokens depends heavily on how a chat is used."
+    list_heading: "Tips"
+    list:
+      - "Start a new chat for a new topic. A long history is sent along with every message."
+      - "Attach only the documents the question needs."
+      - "Pick a fitting model: a smaller one is enough for simple tasks. Web search and attached files enlarge the input."
+      - "Ask precisely. Every follow-up is another run with the whole history."
+
+stats:
+  title: "Total use"
+  intro: "All values are aggregated over all users; no data about individual people is shown. Counted are all gateway requests that carry a user id. The charts show tokens processed per day (last 30 days) and per week (last 12 weeks), and estimated CO₂ per calendar month (last 12 months): the month's tokens × factor. The current month is not complete yet."
+  # Chart texts (rendered by Chart.js in the browser).
+  locale: "en-GB"
+  daily_title: "Tokens per day, last 30 days"
+  daily_label: "Tokens per day (thousands)"
+  weekly_title: "Tokens per week, last 12 weeks"
+  weekly_label: "Tokens per week (thousands)"
+  tokens_axis: "Tokens (thousands)"
+  monthly_title: "Estimated CO₂ per month, last 12 months"
+  monthly_label: "CO₂ per month (kg)"
+  co2_axis: "CO₂ (kg)"
+  error: "Statistics could not be loaded. Please try again later."
