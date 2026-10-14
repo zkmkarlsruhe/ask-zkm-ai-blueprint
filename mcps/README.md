@@ -42,7 +42,7 @@ Wired to house systems, so not vendored. Each is a pattern you can rebuild:
 
 Once your MCP is up and reachable on a docker network OWUI is on:
 
-1. In OWUI: **Admin Settings → External Tools → "+"**, type MCP (streamable HTTP)
+1. In OWUI: **Admin Panel → Settings → Integrations → Tool Servers → "+"**, type MCP (streamable HTTP)
 2. URL: `http://hello-world:8000/mcp` (docker service name, not localhost)
 3. Save. Then bind the tool server to the models that should use it
    (Workspace → Models → Tools). Global tools on every model confuse models
