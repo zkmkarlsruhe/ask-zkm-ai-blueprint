@@ -20,7 +20,8 @@ jobs:
             mcps/opac/src \
             proxies/oauth-translator/src \
             proxies/local-bridge/src \
-            proxies/document-preprocessor/src
+            proxies/document-preprocessor/src \
+            gateway/hooks
 
   validate-compose:
     runs-on: ubuntu-latest
@@ -37,10 +38,10 @@ jobs:
             echo "==> $f"
             (cd "$(dirname "$f")" && \
               env GATEWAY_DOMAIN=x WEBUI_DOMAIN=x WEBUI_URL=https://x WEBUI_NAME=x \
-                  COST_DOMAIN=x LITELLM_API_BASE=x LITELLM_VIRTUAL_KEY=x \
+                  COST_DOMAIN=x CARBON_DOMAIN=y LITELLM_API_BASE=x LITELLM_VIRTUAL_KEY=x \
                   LITELLM_MASTER_KEY=x LITELLM_SALT_KEY=x \
                   POSTGRES_USER=x POSTGRES_PASSWORD=x POSTGRES_DB=x \
-                  REDIS_PASSWORD=x QDRANT_API_KEY=x WEBUI_SECRET_KEY=x \
+                  REDIS_PASSWORD=x QDRANT_API_KEY=x WEBUI_SECRET_KEY=x OWUI_POSTGRES_PASSWORD=x \
                   LITELLM_DB_URL=x OPENWEBUI_DB_URL=x \
                   UPSTREAM_BASE_URL=x UPSTREAM_TOKEN_URL=x \
                   UPSTREAM_CLIENT_ID=x UPSTREAM_CLIENT_SECRET=x INCOMING_BEARER=x \

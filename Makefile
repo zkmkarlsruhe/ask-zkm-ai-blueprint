@@ -64,4 +64,4 @@ lint:
 	@command -v ruff >/dev/null || { echo "install ruff: pip install ruff"; exit 1; }
 	ruff check cost-tracker/app mcps/hello-world/src mcps/opac/src \
 	           proxies/oauth-translator/src proxies/local-bridge/src \
-	           proxies/document-preprocessor/src
+	           proxies/document-preprocessor/src gateway/hooks

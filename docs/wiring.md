@@ -9,7 +9,7 @@ Create the two shared docker networks once, before anything else:
 
 ```bash
 docker network create proxy     # everything that needs to be reachable from outside
-docker network create ai-bus    # cost-tracker reads gateway's DB across this
+docker network create ai-bus    # cost-tracker reads the gateway's and webui's DBs across this
 ```
 
 Each stack's `docker-compose.yml` declares these as `external: true`. Internal
@@ -19,9 +19,9 @@ networks (`backend`, `webui_backend`) are created automatically per stack.
 
 | # | Stack | Why this order |
 |---|---|---|
-| 1 | `gateway/` | webui needs an `OPENAI_API_BASE_URL` to point at, and a virtual key minted from LiteLLM admin |
+| 1 | `gateway/` | webui needs a base URL to point at, and a virtual key for the instance minted with the master key |
 | 2 | `webui/` | needs gateway up; first user becomes admin |
-| 3 | `cost-tracker/` (optional) | needs gateway's postgres reachable on `ai-bus` |
+| 3 | `cost-tracker/` (optional) | needs both postgres instances reachable on `ai-bus` |
 | 4 | `mcps/*` (optional) | each one independent; connect to webui's network after bring-up |
 
 ## The env-var handshakes
@@ -30,38 +30,42 @@ networks (`backend`, `webui_backend`) are created automatically per stack.
 
 In `gateway/`:
 - `GATEWAY_DOMAIN=api.your-house.org`
-- mint a virtual key in LiteLLM admin UI (`/key/generate` with the master key)
+- mint **one** virtual key for this OpenWebUI instance (`/key/generate`
+  with the master key), scoped to the aliases the instance may use
 
 In `webui/.env`:
 - `LITELLM_API_BASE=https://api.your-house.org/v1`
 - `LITELLM_VIRTUAL_KEY=sk-the-virtual-key`
 
-OpenWebUI now sees whatever models you registered in `gateway/config.yaml`.
-Per-user spend is automatically attributed because OWUI sends the user's id in
-the `user` field of every chat completion request, and LiteLLM logs it.
+OpenWebUI now sees the aliases the key may call. Per-user spend is attributed
+because `webui/` sets `ENABLE_FORWARD_USER_INFO_HEADERS=true`: OWUI sends
+`X-OpenWebUI-User-Id` (plus email, name, role, chat id) with every call, and
+the gateway's `user_header_mappings` records the id as the spend row's
+`user`. One key per instance, not one per person.
 
 ### gateway → cost-tracker
 
 In `cost-tracker/.env`:
-- `LITELLM_DB_URL=postgresql://litellm:<gateway POSTGRES_PASSWORD>@postgres:5432/litellm`
+- `LITELLM_DB_URL=postgresql://litellm:<gateway POSTGRES_PASSWORD>@litellm-db:5432/litellm`
 
-The hostname `postgres` resolves on the `ai-bus` network because
-`gateway/docker-compose.yml` puts its postgres service on it.
+`litellm-db` is the gateway postgres's alias on `ai-bus`. Every stack calls
+its DB service `postgres`, so the shared network uses unique aliases.
 
-### webui → cost-tracker (optional, for per-user dashboards)
+### webui → cost-tracker
 
-If you want the cost dashboard to show user *names* and not just opaque ids,
-cost-tracker also needs to read OWUI's user table. OWUI defaults to SQLite,
-which can't be read from another container. You have two options:
+The dashboard shows names, so cost-tracker also reads OWUI's `user` table.
+`webui/` runs on Postgres by default and puts its DB on `ai-bus` as
+`<STACK>-db`:
 
-1. **Skip the join.** Cost-tracker shows user ids only. Carbon page still works.
-2. **Switch OWUI to Postgres.** See
-   [`../examples/postgres-vs-sqlite.md`](../examples/postgres-vs-sqlite.md).
-   Then point `OPENWEBUI_DB_URL` at it.
+- `OPENWEBUI_DB_URL=postgresql://openwebui:<OWUI_POSTGRES_PASSWORD>@webui-db:5432/openwebui`
+
+On SQLite, skip this; the carbon page still works.
 
 ### MCPs → webui
 
-In each MCP's `docker-compose.yml`, add webui's backend network:
+In each MCP's `docker-compose.yml`, add a network OpenWebUI is on (webui's
+backend network, or a shared `proxy`/tools network if several instances use
+the same MCP):
 
 ```yaml
 networks:
@@ -71,13 +75,15 @@ networks:
 ```
 
 (The name is `<webui-stack-name>_backend` — find it with `docker network ls`.)
-Then in OpenWebUI: **Settings → Tools → "+"** with URL
-`http://<service-name>:8000/mcp`.
+Then in OpenWebUI: **Admin Panel → Settings → Integrations → Tool Servers →
+"+"** with URL `http://<service-name>:8000/mcp`, and bind it to the models
+that should use it.
 
 ### webui → MCPs (returning data)
 
-No env wiring needed — MCPs respond to the HTTP call OWUI makes. The MCP
-session lives only as long as the chat turn does.
+No env wiring needed — MCPs respond to the HTTP call OWUI makes. With
+`ENABLE_FORWARD_USER_INFO_HEADERS=true` the call carries the user's id and
+email, so a tool can answer for the asking person.
 
 ## Ports
 
@@ -111,11 +117,12 @@ curl https://$WEBUI_DOMAIN/health
 # Cost-tracker alive?
 curl https://$COST_DOMAIN/health
 
-# Carbon page renders?
-curl https://$COST_DOMAIN/carbon
+# Carbon page renders (public host)? Per-user API refused there?
+curl https://$CARBON_DOMAIN/carbon
+curl -o /dev/null -w '%{http_code}\n' https://$CARBON_DOMAIN/api/users/costs   # 404
 ```
 
-If all four return 200 and the gateway lists at least one model, you have a
+If these return 200 (404 for the last one) and the gateway lists at least one model, you have a
 working stack. Onboard the first user to OWUI now (they become admin), then
 disable signup in `webui/.env` and finish the OIDC wiring per
 [`auth.md`](auth.md).

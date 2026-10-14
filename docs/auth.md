@@ -1,112 +1,154 @@
-# Authentication
+# Identity: login, onboarding, offboarding
 
 The second of the four guarantees: **identity**. Every login goes through
 your institution's existing SSO. No second password, no anonymous accounts.
-People who leave the institution lose access automatically.
 
-This blueprint does not bundle an identity provider. Run whatever you already
-have. Below is the wiring pattern for OpenWebUI's OIDC flow — the example
-uses **Keycloak**, but Authentik, Entra ID, Okta, Auth0, Google Workspace,
-Dex, and any other OIDC provider work the same way.
+This blueprint does not bundle an identity provider. Any OIDC provider works
+(Keycloak, Authentik, Entra ID, Okta, Dex, Google Workspace, ...). The
+directory behind it (LDAP, AD) is the IdP's business; OpenWebUI only sees
+the OIDC claims.
 
-## The pattern in three steps
+## The flow
 
-### 1. Register an OIDC client in your IdP
+```
+Browser            OpenWebUI                     IdP                  gateway
+  | GET /             |                            |                     |
+  | click "SSO"       |                            |                     |
+  |------------------>| 302 /authorize  scope=openid email profile groups
+  |  login at the IdP --------------------------->|                     |
+  |<---------------------------- 302 /oauth/oidc/callback?code=...      |
+  |------------------>| code -> tokens (+ userinfo)|                     |
+  |                   |<-- sub, email, name, groups|                     |
+  |                   | groups contains an allowed role?                 |
+  |                   |   no  -> 403, no account                         |
+  |                   |   yes -> create/find account, role user|admin,   |
+  |                   |          OWUI groups = claim ∩ existing groups   |
+  |<-- session JWT ---|                            |                     |
+  | chat              |-- POST /chat/completions (instance key) -------->|
+  |                   |   X-OpenWebUI-User-Id/-Email/-Role/-Chat-Id      |
+  |                   |                            |  spend row per user |
+```
 
-Whatever your IdP calls "client" or "application":
+## 1. Register an OIDC client in your IdP
 
-- **Client ID**: `museum-ai` (or similar)
-- **Client type**: confidential (server-side, has a client secret)
+- **Client type**: confidential (has a client secret)
 - **Redirect URI**: `https://chat.your-house.org/oauth/oidc/callback`
-- **Scopes requested**: `openid`, `email`, `profile`, `groups`
-- **Add a `groups` claim** to the ID token. This is how you map institution
-  groups to OWUI roles.
+- **Scopes**: `openid`, `email`, `profile`, `groups`
+- **A `groups` claim** in the ID token / userinfo. In Keycloak: client-scope
+  mapper "Group Membership", claim name `groups`, "Full group path" off
+  (OWUI matches exact strings; `/ai-user` does not equal `ai-user`).
 
-Save the **client secret** — you'll need it in step 3.
+## 2. Decide the groups
 
-### 2. Decide your group → role mapping
+| IdP group | OWUI role | OWUI group | Who |
+|---|---|---|---|
+| `ai-user` | user | ai-user | everyone allowed to use the assistant |
+| `ai-expert` | user | ai-expert | more models, more features |
+| `ai-guru` | user | ai-guru | everything, incl. commercial image models |
+| `ai-admin` | admin | ai-admin | the team running the stack |
 
-OpenWebUI has three roles: `admin`, `user`, `pending`. Decide which IdP
-groups grant which:
+Names are yours. Be specific (`ai-user`, not `staff`), so granting access
+doesn't touch a person's general directory entry. Who may add people to
+`ai-user` is a policy decision of whoever owns the IdP; write down who that
+is. Tiers in detail: [`tiers.md`](tiers.md).
 
-| IdP group | OWUI role | Who |
-|---|---|---|
-| `ai-admin` | admin | the small team running the stack |
-| `ai-user` | user | everyone with normal chat access |
-| (none / unmapped) | pending | logged in but no permissions until admin promotes — useful as the default if you don't want a free-for-all |
+## 3. Wire the env vars
 
-The exact group names are yours to pick. Be specific (`ai-user`, not just
-`staff`) so adding/removing access doesn't require touching a person's
-overall directory entry.
-
-### 3. Wire the env vars
-
-In `webui/.env`:
+In `webui/.env` (mapped to OWUI's names in `webui/docker-compose.yml`):
 
 ```bash
-# Disable local login form once OIDC works (admin can re-enable in emergencies)
-ENABLE_LOGIN_FORM=false
-ENABLE_SIGNUP=false
-
-# OIDC config
-OIDC_PROVIDER_NAME=Keycloak
+ENABLE_OAUTH_SIGNUP=true
+OIDC_PROVIDER_NAME=Institution SSO
 OIDC_CLIENT_ID=museum-ai
 OIDC_CLIENT_SECRET=<from step 1>
 OIDC_DISCOVERY_URL=https://sso.your-house.org/realms/main/.well-known/openid-configuration
+
+ENABLE_OAUTH_ROLE_MANAGEMENT=true     # role from the groups claim
+OAUTH_ALLOWED_ROLES=ai-user,ai-admin  # gate: no listed group, no account
+OAUTH_ADMIN_ROLES=ai-admin
+ENABLE_OAUTH_GROUP_MANAGEMENT=true    # OWUI groups follow the claim
 ```
 
-In `webui/docker-compose.yml`, uncomment the OIDC block in the `environment:`
-section. The relevant variables:
+The compose file also sets `OAUTH_GROUP_CLAIM=groups`,
+`ENABLE_OAUTH_GROUP_CREATION=false` (only groups you created in OWUI are
+synced, an IdP typo cannot create a new group) and
+`OAUTH_MERGE_ACCOUNTS_BY_EMAIL=false` (no silent merge into a local account
+with the same email).
 
-```yaml
-ENABLE_OAUTH_SIGNUP: "true"
-OAUTH_PROVIDER_NAME: ${OIDC_PROVIDER_NAME}
-OAUTH_CLIENT_ID: ${OIDC_CLIENT_ID}
-OAUTH_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
-OPENID_PROVIDER_URL: ${OIDC_DISCOVERY_URL}
-OAUTH_SCOPES: openid email profile groups
+## 4. Bootstrap and lock down
 
-# Map IdP groups to OWUI roles based on the "groups" claim:
-ENABLE_OAUTH_ROLE_MANAGEMENT: "true"
-OAUTH_ROLES_CLAIM: groups
-OAUTH_ALLOWED_ROLES: ai-user,ai-admin
-OAUTH_ADMIN_ROLES: ai-admin
-```
+1. Before enabling OIDC, create the local admin (first signup).
+2. Create the OWUI groups (`ai-user`, `ai-expert`, ...) with exactly the
+   names from the claim.
+3. Log in through the IdP in a private window; check role and groups.
+4. Set `ENABLE_LOGIN_FORM=false`, restart. Keep one local admin as
+   break-glass for IdP outages.
+5. `ENABLE_SIGNUP=false`. Signup and many other settings are
+   PersistentConfig: the DB value wins over env after first start. Check the
+   effective value (admin UI, or `GET /api/config`).
 
-Restart webui:
+## Auto-onboarding
 
-```bash
-docker compose up -d --force-recreate open-webui
-```
+There is no manual onboarding step. On first login:
 
-### 4. Bootstrap and lock down
+- allowed group present: account created, role set, OWUI groups synced,
+- groups present but none allowed: HTTP 403, no account,
+- **no `groups` claim at all**: role management cannot decide and the
+  account gets `DEFAULT_USER_ROLE` (`user`). Make sure your IdP always
+  sends the claim (an empty list is fine), or set `DEFAULT_USER_ROLE=pending`.
 
-1. Before disabling local login, log in once with the local admin account.
-2. Confirm OIDC works by logging in through your IdP in a separate browser.
-3. Once OIDC works: set `ENABLE_LOGIN_FORM=false`, restart, verify local
-   login is gone.
-4. Keep one local admin account around as a break-glass for IdP outages.
+Group membership is re-read **at every login**, not continuously: a group
+added in the IdP takes effect on the person's next login.
+
+What a new user sees is decided by per-model grants for their groups; there
+is no per-user setup. Write a short first-steps page and link it in the
+sidebar.
+
+## Offboarding — the caveat
+
+"People who leave lose access automatically" holds only as far as the
+session lifetime allows:
+
+- A person removed from the IdP (or from `ai-user`) cannot log in again.
+- **An already issued OpenWebUI session stays valid until its JWT expires.**
+  OWUI does not re-check the IdP per request. Default `JWT_EXPIRES_IN` is
+  `4w`. If your IdP deactivates leavers once a month, the worst case is
+  roughly a month plus the JWT lifetime.
+- Mitigations: set `JWT_EXPIRES_IN` to something like `1d` or `7d` (users
+  re-login through SSO, usually silent while the IdP session lives), and for
+  an urgent case deactivate or delete the user in OWUI directly.
+- **Data stays.** Accounts, chats, uploads and vectors of people who left are
+  not deleted automatically. Decide a retention rule and implement it (OWUI
+  admin API or DB job). Put it in your privacy notice.
+
+A directory MCP that filters deactivated accounts at cache load is a nice
+side effect: people who left disappear from the phonebook tool on the next
+refresh, independent of OWUI.
+
+## Identity downstream
+
+With `ENABLE_FORWARD_USER_INFO_HEADERS=true` every model and tool call
+carries `X-OpenWebUI-User-Id`, `-Email`, `-Name`, `-Role` and
+`X-OpenWebUI-Chat-Id`:
+
+- the gateway attributes spend per person (`user_header_mappings`) and tags
+  rows with email, role and chat id (`extra_spend_tag_headers`),
+- tool servers can scope answers to the asking person (`/me`).
+
+The headers are plain text on the internal network. Keep tool servers and
+the gateway off untrusted networks, or use OWUI's signed-JWT variant
+(`FORWARD_USER_INFO_HEADER_JWT_SECRET`) where the receiver can verify it.
 
 ## Common gotchas
 
-- **The `groups` claim isn't in the ID token by default** in Keycloak. Add a
-  client-scope mapper of type "Group Membership", set the token claim name to
-  `groups`, set "Add to ID token" = on. Same idea in other IdPs.
-- **Group names with slashes** (Keycloak nests groups under `/`). OWUI's role
-  matcher does an exact string match. Use the simplest leaf names possible.
-- **Email addresses must be unique** across your IdP. If you run multiple
-  realms or merged orgs, two accounts with the same email will collide on
-  first login.
-- **First OIDC login creates the user as `pending`** if `ENABLE_OAUTH_ROLE_MANAGEMENT`
-  is on but the user doesn't match any allowed role. Either widen the groups
-  or have an admin promote them.
-- **Logout is OWUI-local by default.** Configure `OAUTH_LOGOUT_REDIRECT_URL`
-  to your IdP's end-session endpoint if you want SSO-wide logout.
-
-## Why this matters more than it looks
-
-The "people who leave the institution lose access automatically" promise is
-load-bearing for any conversation about data sensitivity. Without it, the
-question "where is the list of people who can talk to your AI?" has no good
-answer. With OIDC plus group-claim mapping, the answer is "the same place as
-everyone else's institution access — your IdP".
+- **The `groups` claim isn't sent by default** in most IdPs. Add the mapper.
+- **Email must be unique** across the IdP. Two accounts with the same email
+  collide on first login (`EMAIL_TAKEN`).
+- **Logout** (OWUI 0.12) sends the browser to the IdP's
+  `end_session_endpoint` from the discovery document, so it ends the SSO
+  session too. Set `WEBUI_AUTH_SIGNOUT_REDIRECT_URL` for where the IdP
+  should send people afterwards, or `OPENID_END_SESSION_ENDPOINT` if your
+  IdP's discovery lacks the endpoint.
+- **Several IdPs in one house** (a central one for staff, a team one for
+  admin tools): document which one guards the assistant. It is easy to
+  debug the wrong one.

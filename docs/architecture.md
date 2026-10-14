@@ -1,82 +1,116 @@
 # Architecture
 
 ```
-            Identity Provider                        Model Providers
-            (Keycloak / Authentik /                  (academic, local,
-             Entra / your IdP)                        commercial)
-                    |                                       ^
-                    | OIDC                                  | OpenAI-compatible
-                    v                                       |
-       +---------------------------------+    +-------------+--------------+
-       |   webui/  (OpenWebUI + Qdrant   |--->|   gateway/  (LiteLLM)      |
-       |   + Redis) — the chat surface   |    |   the one door outside     |
-       +--+------------------+-----------+    +-------------+--------------+
-          |                  |                              |
-          | function calls   | uploads                      | (some providers
-          | (MCP)            v                              |  via proxies/)
-          v          +-------+----------+                   v
-   +------+------+   | proxies/         |       +-----------+----------+
-   | mcps/       |   | document-        |       | proxies/             |
-   | hello-world |   | preprocessor     |       | oauth-translator     |
-   | opac        |   +------------------+       | local-bridge         |
-   | your-house  |                              +-----------+----------+
-   +-------------+                                          |
-                                                            v
-                                                       upstream
-                                                       providers
-                                                            
-          gateway/'s spend logs ---> cost-tracker/ ---> public /carbon page
-                                                       (no auth, on purpose)
+          Identity provider (any OIDC IdP)
+          groups claim: ai-user / ai-expert / ai-guru / ai-admin
+                    |
+                    | OIDC login, groups -> role + OWUI groups
+                    v
+   +------------------------------------------------+
+   | webui/  OpenWebUI (one or many instances)      |
+   |  tiles, prompts, permissions, filters (Postgres)|
+   |  uploads -> volume or S3, RAG vectors -> Qdrant |
+   |  carbon badge (JS)                              |
+   +------------------------------------------------+
+      | model calls                | tool calls       | web + documents
+      | + X-OpenWebUI-User-*       | + X-OpenWebUI-*  |
+      v                            v                  v
+   +----------------------+  +--------------------+  +--------------------------+
+   | gateway/  LiteLLM    |  | MCP tool servers   |  | SearXNG (search)         |
+   | aliases house/*      |  |  directory (+ /me) |  | Firecrawl v2 (fetch)     |
+   | credentials, routing |  |  catalog (opac)    |  | docling-compatible       |
+   | fallbacks, spend     |  |  knowledge-base:   |  |  extraction --> provider |
+   | hooks, Postgres,Redis|  |   one MCP / source |  +--------------------------+
+   +----------------------+  +--------------------+
+      |         |                 |  crawler -> store -> ingestor -> Qdrant
+      |         |                 +--> embeddings via gateway
+      |         v
+      |   +--------------------------+     +-------------------------------+
+      |   | cost-tracker/            |     | upstream providers            |
+      |   |  dashboard (protected)   |     |  academic / EU first          |
+      |   |  carbon page + API       |     |  commercial: visible opt-in   |
+      |   |  (public)                |     |  embed + rerank: no fallback  |
+      |   +--------------------------+     |  self-hosted                  |
+      |     reads spend logs + users       +-------------------------------+
+      +------------------------------------------------^
 ```
 
 ## Why this shape
 
-**One gateway** is the load-bearing decision. If you let OpenWebUI hold
-provider keys directly, you lose the ability to attribute spend, swap
-providers, or log requests for incident response. With one gateway:
-- every token is logged with a `user` id (LiteLLM's virtual keys),
-- swapping a provider is one config change, not a sweep through every client,
+**One gateway for everything that costs tokens** is the load-bearing
+decision. Chat, task generation (titles, tags, search queries), embeddings,
+rerank, image generation and editing, speech-to-text and text-to-speech all
+go through LiteLLM. With one gateway:
+- every token is logged against a person (OpenWebUI forwards the user id in
+  a header; one virtual key per instance, not per person),
+- providers, credentials, aliases and fallbacks live in one place; a model
+  swap is one API call, not a sweep through every client,
 - carbon and cost calculations have one source of truth,
-- the auditor's question "what data left this building?" has one answer.
+- the auditor's question "what data left this building, to whom?" has one
+  answer per alias.
 
-**Two databases**, not one. LiteLLM has its own Postgres (spend, virtual
-keys, cache). OpenWebUI has its own (chats, users, knowledge). The
-cost-tracker reads both — that join is the IP of the cost system.
+**What does not go through the gateway, on purpose:**
 
-**Qdrant + Redis are private to webui.** They don't need to be on the shared
-`ai-bus` network. Keep them on `webui_backend` only.
+| Piece | Why not |
+|---|---|
+| Tool servers (MCP / OpenAPI) | Called by OpenWebUI's tool loop, which also carries the identity headers. LiteLLM's MCP gateway is not used. |
+| Web search (SearXNG) and page fetch (Firecrawl v2) | Search engine and scraper, not models. |
+| Document extraction (docling-compatible) | Not an OpenAI-shaped API; its key lives in the extraction shim. |
+| Login (OIDC IdP) | Identity, not inference. |
+| OpenWebUI runtime config | Tiles, prompts, permissions, filters are product logic in OWUI's DB. |
+
+List these explicitly in your data-flow documentation. They are the paths
+that bypass the gateway's ledger.
+
+**Separate databases.** LiteLLM has its own Postgres (models, keys,
+credentials, spend). Each OpenWebUI instance has its own (chats, users,
+permissions). The cost-tracker reads both — that join is the cost system.
+
+**Qdrant + Redis are private to each webui instance.**
+
+**Knowledge comes from the house's own sources through MCP**, not from
+files uploaded into OWUI knowledge collections: one central service crawls
+and indexes the sources and exposes one MCP endpoint per source. See
+[`knowledge-mcp.md`](knowledge-mcp.md).
 
 ## Networks
 
 | Network | Purpose | Members |
 |---|---|---|
-| `proxy` | reverse-proxy ingress | webui, gateway, cost-tracker |
-| `ai-bus` | inter-stack DB access | gateway-postgres, owui-postgres (if you switched), cost-tracker |
-| `webui_backend` | webui's internals | webui, qdrant, redis |
-| `backend` (per-stack, internal) | each stack's own DB / cache | private |
-| `default` (per-MCP) | each MCP's own | per-MCP |
+| `proxy` | reverse-proxy ingress, tool servers | webui instances, gateway, cost-tracker, MCPs |
+| `ai-bus` | inter-stack DB reads | gateway postgres (`litellm-db`), webui postgres (`<STACK>-db`), cost-tracker |
+| `<stack>_backend` | each stack's internals | private |
 
 Create the shared ones once: `docker network create proxy ai-bus`.
 
+## Where state lives
+
+| State | Where | Back up |
+|---|---|---|
+| Models, aliases, credentials, fallbacks, keys, spend | gateway Postgres | yes, with `LITELLM_SALT_KEY` |
+| Users, chats, tiles, prompts, permissions, tool bindings | webui Postgres | yes |
+| Uploads | `openwebui_data` volume or S3 | yes |
+| RAG vectors | Qdrant (+ snapshots volume) | snapshot before upgrades; rebuildable from uploads at a cost |
+| Sessions, config cache | Redis | no |
+
+Much of the behaviour is runtime config in two databases, not in git. That
+is a deliberate trade: the gateway and OWUI apply changes without a restart.
+The price is that git does not describe the running system; the DBs do.
+
 ## What's NOT shown above
 
-- **Reverse proxy** (Traefik, Caddy, nginx). Required, but not bundled — every
-  house has theirs. See [`../examples/traefik-snippet.yml`](../examples/traefik-snippet.yml).
-- **TLS / ACME**. Whatever your reverse proxy uses.
-- **Backups**. The two postgres volumes and `openwebui_data` are what to back
-  up. Qdrant and redis are recoverable; the others are not.
-- **Monitoring**. LiteLLM exposes `/metrics`; OWUI's logs are docker-standard.
-  Plug into whatever you already run.
+- **Reverse proxy / TLS.** Required, not bundled. See
+  [`../examples/traefik-snippet.yml`](../examples/traefik-snippet.yml).
+- **Monitoring.** LiteLLM exposes `/metrics`; containers log to stdout.
+- **Operations** (upgrades, snapshots, canaries): [`operations.md`](operations.md).
 
-## What ZKM runs that this blueprint deliberately omits
+## What the reference deployment adds on top
 
-The production ask.zkm.ai stack adds, on top of this blueprint:
+- a custom OWUI image (carbon badge, house links, branding, small upstream
+  patches applied with build-time checks),
+- custom gateway image with provider-compatibility hooks,
+- house-specific MCPs (directory, catalog, knowledge base, archive),
+- a small fleet of additional OWUI instances (workshops, test bench,
+  artworks) on the same gateway.
 
-- a custom OWUI image with carbon badge + house links + ZKM branding
-- a knowledge-sync job that ingests our wiki + website into the OWUI Knowledge
-  feature, group-scoped
-- multiple model proxies in front of `gateway/` for academic-cloud quirks
-  (document conversion, image generation, OAuth flows specific to a provider)
-- workshop-tenant variants of `webui/` from a forge template
-
-Those are house-specific. The blueprint above is the part that generalises.
+The blueprint here is the part that generalises.
