@@ -1,7 +1,7 @@
 /* ============================================================================
  * carbon-badge.js — in-chat CO₂ widget for OpenWebUI
  * ----------------------------------------------------------------------------
- * Polls cost-tracker/'s public /carbon/{user_id} endpoint and renders a small
+ * Polls cost-tracker/'s public /api/carbon/{user_id} endpoint and renders a small
  * badge in the corner of the chat surface showing the user's CO₂ for today.
  *
  * This is a BLUEPRINT, not production code. To adapt for your install:
@@ -19,19 +19,21 @@
   'use strict';
 
   // ---- CONFIG (edit for your house) ----------------------------------------
+  // Public host of cost-tracker/ (CARBON_DOMAIN), never the dashboard host.
   const CARBON_API = window.CARBON_API_BASE || 'https://carbon.example.org';
-  const CARBON_PUBLIC_URL = window.CARBON_PUBLIC_URL || 'https://carbon.example.org/';
+  const CARBON_PUBLIC_URL = window.CARBON_PUBLIC_URL || 'https://carbon.example.org/carbon';
   const POLL_INTERVAL_MS = 30_000;
 
   // ---- USER ID DISCOVERY ---------------------------------------------------
-  // OWUI stores the logged-in user object in localStorage under various keys
-  // depending on version. Adjust this for the version you ship.
+  // OWUI (0.9 through 0.12) keeps its session JWT in localStorage 'token'; the
+  // payload carries the user id. Re-check this when you bump OWUI.
   function currentUserId() {
     try {
-      const raw = localStorage.getItem('user') || localStorage.getItem('auth');
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed?.id || parsed?.user?.id || null;
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      const payload = token.split('.')[1];
+      const json = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+      return json.id || json.sub || null;
     } catch {
       return null;
     }
@@ -74,7 +76,7 @@
     const userId = currentUserId();
     if (!userId) return;
     try {
-      const r = await fetch(`${CARBON_API}/carbon/${encodeURIComponent(userId)}`, {
+      const r = await fetch(`${CARBON_API}/api/carbon/${encodeURIComponent(userId)}`, {
         method: 'GET',
         cache: 'no-store',
       });
@@ -83,6 +85,8 @@
       const grams = Math.round((co2_kg || 0) * 1000 * 100) / 100;
       const badge = ensureBadge();
       badge.textContent = `${grams.toFixed(2)} g CO₂`;
+      // The public page shows the amount (in kg) when linked from the badge.
+      badge.href = `${CARBON_PUBLIC_URL}?amount=${co2_kg || 0}`;
     } catch {
       /* network blip — try again next tick */
     }

@@ -1,0 +1,12 @@
+# One OpenWebUI instance of a fleet. Everything comes from the shared base;
+# this file only gives the instance its own project. Per-instance values
+# (STACK, domain, gateway key, secrets) live in this directory's .env, or in
+# the stack env of your GitOps tool.
+#
+# Bump the base once (OWUI version, env fix) and every instance follows.
+# Prefer env variables in the base over per-instance overrides: services
+# pulled in via include cannot be redefined in this file.
+name: ${STACK}
+
+include:
+  - ../../docker-compose.yml

@@ -5,6 +5,7 @@
 # random secrets. Run as:  ./gen-env.sh > .env
 set -euo pipefail
 
+read -rp "Instance name, lowercase (e.g. 'chat' or 'workshop'): " STACK
 read -rp "Display name (e.g. 'Acme Museum AI'): " WEBUI_NAME
 read -rp "Public URL (e.g. https://chat.acme.org): " WEBUI_URL
 read -rp "Default locale [en]: " DEFAULT_LOCALE
@@ -20,6 +21,7 @@ WEBUI_DOMAIN=$(printf '%s\n' "$WEBUI_URL" | sed -E 's#^https?://##; s#/.*$##')
 rand() { openssl rand -hex "$1"; }
 
 cat <<EOF
+STACK=$STACK
 WEBUI_NAME=$WEBUI_NAME
 WEBUI_URL=$WEBUI_URL
 WEBUI_DOMAIN=$WEBUI_DOMAIN
@@ -30,6 +32,9 @@ ENABLE_LOGIN_FORM=true
 
 LITELLM_API_BASE=$LITELLM_API_BASE
 LITELLM_VIRTUAL_KEY=$LITELLM_VIRTUAL_KEY
+RAG_EMBEDDING_MODEL=house/embed
+
+OWUI_POSTGRES_PASSWORD=$(rand 24)
 
 QDRANT_API_KEY=$(rand 24)
 REDIS_PASSWORD=$(rand 24)

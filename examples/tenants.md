@@ -1,76 +1,72 @@
-# Multi-tenancy: workshop and instructor tenants
+# Multi-tenancy: a fleet of OpenWebUI instances
 
-How to run more than one OpenWebUI on the same host without interference.
-Useful for: workshops where each cohort gets its own instance, instructors
-who want a separate sandbox, departments that want isolation.
+How to run more than one OpenWebUI next to each other without interference.
+Useful for: workshops where each cohort gets its own instance, exhibitions
+or artworks with their own chat surface, a test bench for upgrades,
+departments that want isolation.
 
 ## The pattern
 
-Each tenant is a full copy of the `webui/` stack with:
+One shared base compose file, one tiny compose file per instance:
 
-- a unique `name:` in `docker-compose.yml` (so docker doesn't collide on
-  service names)
-- a unique hostname (`workshop-2026-march.chat.your-house.org`)
-- its own volumes (separate chat history, separate Qdrant data)
-- **shared `gateway/`** — every tenant talks to the same model provider
-  registry, with separate virtual keys so spend is attributable per-tenant
-- **shared `cost-tracker/`** — sees all tenants in one dashboard
+```
+webui/docker-compose.yml                       # base: images, env, services
+webui/instances/<name>/docker-compose.yml      # name: ${STACK} + include: base
+webui/instances/<name>/.env                    # everything instance-specific
+```
 
-This is exactly what ZKM uses for workshop tenants: same gateway, same cost
-tracker, isolated chat surfaces.
+Each instance gets:
 
-## Bring up a new tenant
+- its own project name (`STACK`), so containers, volumes and the Traefik
+  router name don't collide
+- its own hostname
+- its own volumes and Postgres (separate chat history, separate vectors)
+- **its own virtual key on the shared `gateway/`**, scoped to the models
+  that audience may use, so spend is attributable per instance
+- the shared `cost-tracker/` sees all instances in one ledger
+
+Bumping OWUI or fixing an env var in the base updates every instance. That
+is the reason for `include:` over copying the folder: copies drift.
+
+## Bring up a new instance
 
 ```bash
-# 1. Copy the webui/ folder to a tenant-specific name.
-cp -r webui/ tenants/workshop-march/
-
-# 2. Edit the new docker-compose.yml: change name + hostname.
-cd tenants/workshop-march/
-sed -i 's/^name: webui$/name: workshop-march/' docker-compose.yml
-
-# 3. Generate fresh secrets and a unique hostname.
-./gen-env.sh > .env
-$EDITOR .env                 # set WEBUI_DOMAIN to a unique subdomain
-
-# 4. Mint a virtual key in LiteLLM admin specifically for this tenant.
-#    Use it for LITELLM_VIRTUAL_KEY in this tenant's .env.
-#    Now spend is per-tenant in cost-tracker.
-
-# 5. Up.
+cp -r webui/instances/example-workshop webui/instances/workshop-march
+cd webui/instances/workshop-march
+cp .env.example .env
+$EDITOR .env      # STACK, WEBUI_DOMAIN, fresh secrets, its own virtual key
 docker compose up -d
 ```
 
-## Decisions to make per-tenant
+With a GitOps tool (Portainer, Argo, Flux, plain cron + git pull): one
+directory or branch per instance, all pointing at the same base. Keep the
+instance's secrets in the tool's stack env, not in git.
 
-- **Local-only auth or full OIDC?** Workshops with external participants who
-  don't have your IdP account: enable local signup for the tenant's domain,
-  set per-tenant admin manually. Internal tenants: same OIDC config as the
-  main `webui/`.
-- **Per-tenant model allowlist?** LiteLLM virtual keys can be scoped to a
-  subset of models. If a workshop only needs cheap/local models, don't give
-  it the key that unlocks the expensive ones.
-- **Per-tenant budget?** Set on the virtual key in LiteLLM admin. Tenant
-  hits the cap, requests start failing with a clear message. The cap is
-  per-day or per-month.
-- **Lifetime?** Workshop tenants exist for a fixed period. Tear them down
-  cleanly: `docker compose down -v` removes the volumes (chats + Qdrant
-  data) too.
+## Decisions to make per instance
 
-## What stays shared
+- **Local accounts or OIDC?** Workshops with external participants: local
+  accounts, admin creates them. Internal instances: same OIDC wiring as the
+  main instance, possibly a different allowed group.
+- **Model scope.** Scope the instance's virtual key to the aliases it needs.
+  A workshop that only needs one sovereign chat model should not hold a key
+  that unlocks commercial models.
+- **Budget?** The reference deployment tracks instead of capping. If an
+  instance is open to the public, a `max_budget` on its key is the simple
+  hard stop.
+- **Embeddings.** An instance without a gateway embedding alias can fall
+  back to OWUI's local SentenceTransformers. Costs CPU and image size, saves
+  nothing worth it if the gateway is there.
+- **Lifetime.** Tear down with `docker compose down -v` (removes chats and
+  vectors) and revoke its virtual key.
 
-- `gateway/` — one LiteLLM, one model registry, one spend log
-- `cost-tracker/` — one dashboard showing all tenants
-- `proxy` and `ai-bus` networks
-- Reverse proxy + TLS
+## Promote upgrades through the fleet
+
+Use one non-production instance as the canary: bump the base there first
+(see [`../docs/operations.md`](../docs/operations.md)), check sign-in, chat,
+tools, uploads, then roll the rest.
 
 ## What doesn't generalise
 
-If you need *strong* tenant isolation — e.g. different houses sharing one
-host, where one tenant must not see another tenant's chat content even if a
-DB user got compromised — this pattern is not it. Each tenant has its own DB
-user, but they live in the same Docker host. For real isolation, separate
-hosts.
-
-For workshops, classrooms, "give the volunteer team their own sandbox" — this
-is exactly enough.
+All instances share one Docker host and one gateway. If tenants must be
+isolated against a compromised neighbour (different institutions on one
+host), use separate hosts.

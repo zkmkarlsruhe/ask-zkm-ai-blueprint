@@ -11,7 +11,8 @@
 #
 # Then in docker-compose.yml swap `image:` for a `build:` block pointing here.
 
-ARG OWUI_VERSION=0.7.2
+# Pin tag and digest in production (FROM ...:v0.12.0@sha256:...), Renovate-bumped.
+ARG OWUI_VERSION=v0.12.0
 FROM ghcr.io/open-webui/open-webui:${OWUI_VERSION}
 
 # OWUI serves its frontend out of /app/build. The exact path may shift across
@@ -31,3 +32,17 @@ RUN INDEX="${FRONTEND_DIR}/index.html" && \
     if ! grep -q 'house/carbon-badge.js' "$INDEX"; then \
       sed -i 's#</body>#<script src="/static/house/carbon-badge.js" defer></script>\n<script src="/static/house/sidebar-links.js" defer></script>\n</body>#' "$INDEX"; \
     fi
+
+# Build smoke test: the injection landed and every referenced file exists.
+# A silent no-op here ships an image without badge and links.
+RUN INDEX="${FRONTEND_DIR}/index.html" && \
+    grep -q 'house/carbon-badge.js' "$INDEX" && \
+    grep -q 'house/sidebar-links.js' "$INDEX" && \
+    test -f ${FRONTEND_DIR}/static/house/carbon-badge.js && \
+    test -f ${FRONTEND_DIR}/static/house/sidebar-links.js && \
+    echo "build smoke OK"
+
+# Upstream bugs you work around get their own RUN with a sed AND a grep that
+# fails the build when the patch no longer applies, plus a comment naming the
+# condition for removing it. A patch that silently stops matching is worse
+# than no patch.

@@ -1,91 +1,58 @@
 # Postgres vs. SQLite for OpenWebUI
 
-OWUI defaults to SQLite. That's fine for evaluation, demos, and houses with
-under ~50 active users. For everyone else, Postgres.
+Since 0.2.0, `webui/docker-compose.yml` runs OpenWebUI on **Postgres** by
+default. SQLite stays an option for evaluation and very small installs.
 
-## Why switch
+## Why Postgres is the default
 
-- **Per-user spend dashboards** in `cost-tracker/` need to read OWUI's `user`
-  table from another container. SQLite can't be read from outside the OWUI
-  container. Postgres can.
-- **Concurrent writes** at scale (>50 active users, lots of long chats) start
-  hitting SQLite's writer lock. Symptoms: chat saves stalling, "database is
-  locked" errors in OWUI logs.
-- **Backups become trivial** with `pg_dump` instead of "stop OWUI, snapshot
-  the volume".
+- **Per-user spend dashboards** in `cost-tracker/` read OWUI's `user` table
+  from another container. SQLite can't be read from outside the OWUI
+  container. Postgres can (over the `ai-bus` network).
+- **Concurrent writes** at scale (>50 active users, long chats, many file
+  uploads) hit SQLite's writer lock. Symptoms: chat saves stalling,
+  "database is locked" in OWUI logs.
+- **Backups and upgrades**: `pg_dump` before every OWUI bump gives you a
+  restore point for the DB migrations each minor version runs.
 
-## How to switch
+## Running on SQLite instead
 
-### 1. Add a Postgres service to webui/docker-compose.yml
+In `webui/docker-compose.yml`:
 
-```yaml
-services:
-  open-webui:
-    environment:
-      DATABASE_URL: postgresql://${OWUI_POSTGRES_USER}:${OWUI_POSTGRES_PASSWORD}@owui-postgres:5432/${OWUI_POSTGRES_DB}
-    depends_on:
-      owui-postgres:
-        condition: service_healthy
-    networks:
-      - proxy
-      - backend
-      - ai-bus     # so cost-tracker can reach owui-postgres
+1. Remove the `DATABASE_URL` line from `open-webui.environment`.
+2. Remove the `postgres` service, its `depends_on` entry and the
+   `postgres_data` volume.
 
-  owui-postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${OWUI_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${OWUI_POSTGRES_PASSWORD}
-      POSTGRES_DB: ${OWUI_POSTGRES_DB}
-    volumes:
-      - owui_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${OWUI_POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - backend
-      - ai-bus
+OWUI then keeps `webui.db` in the `openwebui_data` volume. `cost-tracker/`
+can still serve the carbon page and API (they read only the gateway's DB);
+the per-user dashboard cannot resolve names.
 
-volumes:
-  openwebui_data: {}
-  owui_postgres_data: {}     # add this
-```
+## Moving an existing SQLite install to Postgres
 
-### 2. Migrate from SQLite to Postgres
-
-If you already have data in SQLite that you want to keep, OWUI doesn't ship a
-migration tool. Two options:
+OWUI ships no migration tool. Two options:
 
 - **Fresh start (easiest)**: bring up Postgres, OWUI creates its schema on
-  first boot, sign in as admin, re-onboard users via OIDC. Your old chats are
-  abandoned in the SQLite volume.
-- **Manual migration**: `sqlite3 webui.db .dump`, hand-edit the SQL to be
-  Postgres-compatible (mostly: rename `INTEGER PRIMARY KEY AUTOINCREMENT` to
-  `SERIAL`, change `BLOB` to `BYTEA`, fix quote styles), `psql -f` into the
-  new DB. Not for the faint of heart.
+  first boot, sign in as admin, re-onboard users via OIDC. Old chats stay in
+  the SQLite volume.
+- **Copy the data**: a generic tool such as `pgloader` can move the tables;
+  run it against a stopped OWUI of the *same* version, then start that
+  version on Postgres before bumping anything. Test on a copy first.
 
-For most houses, fresh-start is the right call. People care less about old
-chat history than you'd think.
+## Postgres versions
 
-### 3. Wire cost-tracker
-
-In `cost-tracker/.env`:
-
-```
-OPENWEBUI_DB_URL=postgresql://${OWUI_POSTGRES_USER}:${OWUI_POSTGRES_PASSWORD}@owui-postgres:5432/${OWUI_POSTGRES_DB}
-```
-
-Per-user spend dashboards now show names instead of opaque ids.
+- Pin the major version. A major bump (17 to 18) needs `pg_upgrade` (or an
+  image like `pgautoupgrade` that runs it in place on first start), not just
+  a tag change.
+- The official Postgres 18 images keep data under
+  `/var/lib/postgresql/18/docker` and expect the volume at
+  `/var/lib/postgresql`. A volume that older images used at
+  `/var/lib/postgresql/data` does not start under 18 unchanged.
+- Stay on the same libc family when upgrading in place (Debian to Alpine
+  changes collation order under existing indexes).
+- OWUI publishes no Postgres support matrix. Before a major bump, restore a
+  dump into the new version and drive the real image against it (sign in,
+  list and search chats, run a completion) before you switch production.
 
 ## Notes
 
-- Pinning a Postgres major version is mandatory. Bumping major versions
-  (16 → 17) requires a `pg_upgrade` dance, not just changing the image tag.
-- Keep the postgres container's volume on a fast disk. The chat experience
-  feels noticeably worse on spinning rust under load.
-- Don't share the postgres instance with other applications. The "one DB per
-  service" pattern is cheaper than the debugging when something else corrupts
-  OWUI's tables.
+- Keep the volume on a fast disk.
+- Don't share the instance with other applications: one DB per service.
