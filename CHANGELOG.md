@@ -8,6 +8,18 @@ implementation, not a library you depend on.
 
 ## [Unreleased]
 
+### Fixed
+
+- **cost-tracker:** DB connection errors no longer return the driver message
+  (DB host, port) to the public carbon API; the traceback goes to the log.
+- **cost-tracker:** DB handlers are plain `def`, so FastAPI runs them in the
+  threadpool. Sync psycopg2 calls inside `async def` blocked the event loop;
+  under badge polling `/health` timed out and the proxy dropped the routes.
+- **cost-tracker:** date filters are ranges on `"startTime"` instead of
+  `DATE("startTime")` / `"startTime"::date`, so they use the startTime
+  index. The badge query went from 22 s (full scan of a 14 GB spend table)
+  to 0.01 s in the reference deployment.
+
 ## [0.2.0] — 2026-10-14
 
 Snapshot of the reference deployment as it runs today.

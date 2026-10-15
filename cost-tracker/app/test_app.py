@@ -7,6 +7,7 @@ os.environ["DASHBOARD_HOST"] = "costs.zkm.tech"
 os.environ.pop("LITELLM_DB_URL", None)
 os.environ.pop("OPENWEBUI_DB_URL", None)
 
+import main
 from fastapi.testclient import TestClient
 from main import app, format_co2
 
@@ -39,3 +40,8 @@ assert c.get("/carbon", headers=pub).status_code == 200
 assert "0.4 g" in c.get("/carbon?amount=0.0004", headers=pub).text
 assert c.get("/health", headers=pub).status_code == 200
 print("cost-tracker self-check OK")
+
+# DB failures must not leak driver text (host, user) into responses.
+main.LITELLM_DB = "postgresql://leakuser:pw@127.0.0.1:1/leakdb"
+r = c.get("/api/carbon/00000000-0000-0000-0000-000000000000")
+assert r.status_code == 500 and "127.0.0.1" not in r.text, r.text
