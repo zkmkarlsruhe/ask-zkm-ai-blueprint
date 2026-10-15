@@ -20,6 +20,7 @@ misconfiguration therefore cannot publish staff spend on the public host.
 """
 from __future__ import annotations
 
+import logging
 import math
 import os
 from datetime import datetime, timedelta
@@ -35,6 +36,7 @@ from fastapi.templating import Jinja2Templates
 from psycopg2.extras import RealDictCursor
 
 app = FastAPI(title="Cost & Carbon API")
+logger = logging.getLogger("uvicorn.error")
 
 # Public CORS for the carbon API (no credentials, GET-only).
 app.add_middleware(
@@ -109,7 +111,9 @@ def get_db_connection(db_url: str | None):
     try:
         return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
     except psycopg2.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {e}") from e
+        # Driver text can name the DB host and user; keep it in the log, not the response.
+        logger.exception("Database connection failed")
+        raise HTTPException(status_code=500, detail="Database connection failed") from e
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +122,7 @@ def get_db_connection(db_url: str | None):
 # ---------------------------------------------------------------------------
 
 @costs_router.get("/costs")
-async def get_user_costs(
+def get_user_costs(
     start_date: str | None = Query(None, description="YYYY-MM-DD"),
     end_date: str | None = Query(None, description="YYYY-MM-DD"),
 ):
@@ -157,8 +161,8 @@ async def get_user_costs(
                     SUM(prompt_tokens)       AS prompt_tokens,
                     SUM(completion_tokens)   AS completion_tokens
                 FROM "LiteLLM_SpendLogs"
-                WHERE "startTime"::date >= %s
-                  AND "startTime"::date <= %s
+                WHERE "startTime" >= %s::date
+                  AND "startTime" < %s::date + 1
                   AND "user" IS NOT NULL
                   AND "user" != ''
                 GROUP BY "user"
@@ -211,7 +215,7 @@ async def get_user_costs(
 # ---------------------------------------------------------------------------
 
 @carbon_router.get("/{user_id}")
-async def get_user_carbon(user_id: str):
+def get_user_carbon(user_id: str):
     """Today's CO2 estimate for one user id. Backs the in-chat badge.
 
     Public by design: returns one number for an opaque user UUID, no name,
@@ -225,7 +229,8 @@ async def get_user_carbon(user_id: str):
                 """
                 SELECT COALESCE(SUM(total_tokens), 0) AS total_tokens
                 FROM "LiteLLM_SpendLogs"
-                WHERE "user" = %s AND DATE("startTime") = CURRENT_DATE
+                WHERE "user" = %s
+                  AND "startTime" >= CURRENT_DATE AND "startTime" < CURRENT_DATE + 1
                 """,
                 (user_id,),
             )
@@ -276,19 +281,19 @@ def _aggregate_stats(group_by_sql: str, range_sql: str, label_key: str):
 
 
 @carbon_router.get("/stats/daily")
-async def daily_stats():
+def daily_stats():
     """Aggregated daily token usage and CO2, last 30 days."""
     return _aggregate_stats('DATE("startTime")', "30 days", "date")
 
 
 @carbon_router.get("/stats/weekly")
-async def weekly_stats():
+def weekly_stats():
     """Aggregated weekly token usage and CO2, last 12 weeks."""
     return _aggregate_stats('DATE_TRUNC(\'week\', "startTime")::date', "12 weeks", "week_start")
 
 
 @carbon_router.get("/stats/monthly")
-async def monthly_stats():
+def monthly_stats():
     """Aggregated monthly token usage and CO2, last 12 months."""
     return _aggregate_stats('DATE_TRUNC(\'month\', "startTime")::date', "12 months", "month_start")
 
